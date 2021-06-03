@@ -31,8 +31,8 @@ type settingsPage struct {
 	common        pageCommon
 	pageContainer layout.List
 	theme         *decredmaterial.Theme
-	walletInfo    *wallet.MultiWalletInfo
 	wal           *wallet.Wallet
+	multiWallet   *dcrlibwallet.MultiWallet
 
 	updateConnectToPeer *widget.Clickable
 	updateUserAgent     *widget.Clickable
@@ -40,6 +40,8 @@ type settingsPage struct {
 	chevronRightIcon    *widget.Icon
 	confirm             decredmaterial.Button
 	cancel              decredmaterial.Button
+	backButton          decredmaterial.IconButton
+	infoButton          decredmaterial.IconButton
 
 	isDarkModeOn     *widget.Bool
 	spendUnconfirmed *widget.Bool
@@ -54,23 +56,22 @@ type settingsPage struct {
 	peerAddr          string
 	agentValue        string
 	errorReceiver     chan error
-	loadPage          func(pageIcons)
 
 	currencyPreference *preference.ListPreference
 	languagePreference *preference.ListPreference
 }
 
-func (win *Window) SettingsPage(common pageCommon) Page {
+func SettingsPage(common pageCommon) Page {
 	chevronRightIcon := common.icons.chevronRight
 
 	pg := &settingsPage{
 		pageContainer: layout.List{
 			Axis: layout.Vertical,
 		},
-		theme:      common.theme,
-		walletInfo: win.walletInfo,
-		wal:        common.wallet,
-		common:     common,
+		theme:       common.theme,
+		wal:         common.wallet,
+		multiWallet: common.multiWallet,
+		common:      common,
 
 		isDarkModeOn:     new(widget.Bool),
 		spendUnconfirmed: new(widget.Bool),
@@ -88,15 +89,13 @@ func (win *Window) SettingsPage(common pageCommon) Page {
 
 		confirm: common.theme.Button(new(widget.Clickable), "Ok"),
 		cancel:  common.theme.Button(new(widget.Clickable), values.String(values.StrCancel)),
-
-		loadPage: win.loadPage,
 	}
 
 	languagePreference := preference.NewListPreference(common.wallet, common.theme, languagePreferenceKey,
 		values.DefaultLangauge, values.ArrLanguages).
 		Title(values.StrLanguage).
 		PostiveButton(values.StrConfirm, func() {
-			values.SetUserLanguage(pg.wal.ReadStringConfigValueForKey(languagePreferenceKey))
+			values.SetUserLanguage(pg.multiWallet.ReadStringConfigValueForKey(languagePreferenceKey))
 		}).
 		NegativeButton(values.StrCancel, func() {})
 	pg.languagePreference = languagePreference
@@ -122,7 +121,13 @@ func (win *Window) SettingsPage(common pageCommon) Page {
 
 	pg.chevronRightIcon.Color = color
 
+	pg.backButton, pg.infoButton = common.SubPageHeaderButtons()
+
 	return pg
+}
+
+func (pg *settingsPage) pageID() string {
+	return PageSettings
 }
 
 func (pg *settingsPage) Layout(gtx layout.Context) layout.Dimensions {
@@ -133,8 +138,10 @@ func (pg *settingsPage) Layout(gtx layout.Context) layout.Dimensions {
 		page := SubPage{
 			title: values.String(values.StrSettings),
 			back: func() {
-				common.changePage(PageMore)
+				common.popPage()
 			},
+			backButton: pg.backButton,
+			infoButton: pg.infoButton,
 			body: func(gtx layout.Context) layout.Dimensions {
 				pageContent := []func(gtx C) D{
 					pg.general(),
@@ -152,20 +159,14 @@ func (pg *settingsPage) Layout(gtx layout.Context) layout.Dimensions {
 	}
 
 	if pg.currencyPreference.IsShowing {
-		return pg.currencyPreference.Layout(gtx, common.Layout(gtx, func(gtx C) D {
-			return common.UniformPadding(gtx, body)
-		}))
+		return pg.currencyPreference.Layout(gtx, pg.common.UniformPadding(gtx, body))
 	}
 
 	if pg.languagePreference.IsShowing {
-		return pg.languagePreference.Layout(gtx, common.Layout(gtx, func(gtx C) D {
-			return common.UniformPadding(gtx, body)
-		}))
+		return pg.languagePreference.Layout(gtx, pg.common.UniformPadding(gtx, body))
 	}
 
-	return common.Layout(gtx, func(gtx C) D {
-		return common.UniformPadding(gtx, body)
-	})
+	return pg.common.UniformPadding(gtx, body)
 }
 
 func (pg *settingsPage) general() layout.Widget {
@@ -184,7 +185,7 @@ func (pg *settingsPage) general() layout.Widget {
 						title:     values.String(values.StrCurrencyConversion),
 						clickable: pg.currencyPreference.Clickable(),
 						icon:      pg.chevronRightIcon,
-						label:     pg.theme.Body2(pg.wal.ReadStringConfigValueForKey(dcrlibwallet.CurrencyConversionConfigKey)),
+						label:     pg.theme.Body2(pg.multiWallet.ReadStringConfigValueForKey(dcrlibwallet.CurrencyConversionConfigKey)),
 					}
 					return pg.clickableRow(gtx, currencyConversionRow)
 				}),
@@ -194,7 +195,7 @@ func (pg *settingsPage) general() layout.Widget {
 						title:     values.String(values.StrLanguage),
 						clickable: pg.languagePreference.Clickable(),
 						icon:      pg.chevronRightIcon,
-						label:     pg.theme.Body2(pg.wal.ReadStringConfigValueForKey(languagePreferenceKey)),
+						label:     pg.theme.Body2(pg.multiWallet.ReadStringConfigValueForKey(languagePreferenceKey)),
 					}
 					return pg.clickableRow(gtx, languageRow)
 				}),
@@ -379,16 +380,16 @@ func (pg *settingsPage) handle() {
 
 	if pg.isDarkModeOn.Changed() {
 		pg.theme.SwitchDarkMode(pg.isDarkModeOn.Value)
-		pg.wal.SaveConfigValueForKey("isDarkModeOn", pg.isDarkModeOn.Value)
-		pg.loadPage(common.icons)
+		pg.multiWallet.SaveUserConfigValue("isDarkModeOn", pg.isDarkModeOn.Value)
+		// pg.loadPage(common.icons)
 	}
 
 	if pg.spendUnconfirmed.Changed() {
-		pg.wal.SaveConfigValueForKey(dcrlibwallet.SpendUnconfirmedConfigKey, pg.spendUnconfirmed.Value)
+		pg.multiWallet.SaveUserConfigValue(dcrlibwallet.SpendUnconfirmedConfigKey, pg.spendUnconfirmed.Value)
 	}
 
 	if pg.beepNewBlocks.Changed() {
-		pg.wal.SaveConfigValueForKey(dcrlibwallet.BeepNewBlocksConfigKey, pg.beepNewBlocks.Value)
+		pg.multiWallet.SaveUserConfigValue(dcrlibwallet.BeepNewBlocksConfigKey, pg.beepNewBlocks.Value)
 	}
 
 	for pg.changeStartupPass.Clicked() {
@@ -446,7 +447,7 @@ func (pg *settingsPage) handle() {
 					title:    values.String(values.StrConnectToSpecificPeer),
 					confirm: func(ipAddress string) {
 						if ipAddress != "" {
-							pg.wal.SaveConfigValueForKey(specificPeerKey, ipAddress)
+							pg.multiWallet.SaveUserConfigValue(specificPeerKey, ipAddress)
 							common.closeModal()
 						}
 					},
@@ -457,7 +458,7 @@ func (pg *settingsPage) handle() {
 			}()
 			return
 		}
-		pg.wal.RemoveUserConfigValueForKey(specificPeerKey)
+		pg.multiWallet.DeleteUserConfigValueForKey(specificPeerKey)
 	}
 	for pg.updateConnectToPeer.Clicked() {
 		go func() {
@@ -466,7 +467,7 @@ func (pg *settingsPage) handle() {
 				title:    values.String(values.StrChangeSpecificPeer),
 				confirm: func(ipAddress string) {
 					if ipAddress != "" {
-						pg.wal.SaveConfigValueForKey(specificPeerKey, ipAddress)
+						pg.multiWallet.SaveUserConfigValue(specificPeerKey, ipAddress)
 						common.closeModal()
 					}
 				},
@@ -486,7 +487,7 @@ func (pg *settingsPage) handle() {
 				title:    values.String(values.StrChangeUserAgent),
 				confirm: func(agent string) {
 					if agent != "" {
-						pg.wal.SaveConfigValueForKey(userAgentKey, agent)
+						pg.multiWallet.SaveUserConfigValue(userAgentKey, agent)
 						common.closeModal()
 					}
 				},
@@ -506,7 +507,7 @@ func (pg *settingsPage) handle() {
 					title:    values.String(values.StrChangeUserAgent),
 					confirm: func(agent string) {
 						if agent != "" {
-							pg.wal.SaveConfigValueForKey(userAgentKey, agent)
+							pg.multiWallet.SaveUserConfigValue(userAgentKey, agent)
 							common.closeModal()
 						}
 					},
@@ -517,7 +518,7 @@ func (pg *settingsPage) handle() {
 			}()
 			return
 		}
-		pg.wal.RemoveUserConfigValueForKey(userAgentKey)
+		pg.multiWallet.DeleteUserConfigValueForKey(userAgentKey)
 	}
 
 	select {
@@ -534,7 +535,7 @@ func (pg *settingsPage) handle() {
 }
 
 func (pg *settingsPage) updateSettingOptions() {
-	isPassword := pg.wal.IsStartupSecuritySet()
+	isPassword := pg.multiWallet.IsStartupSecuritySet()
 	pg.startupPassword.Value = false
 	pg.isStartupPassword = false
 	if isPassword {
@@ -542,32 +543,32 @@ func (pg *settingsPage) updateSettingOptions() {
 		pg.isStartupPassword = true
 	}
 
-	isDarkModeOn := pg.wal.ReadBoolConfigValueForKey("isDarkModeOn")
+	isDarkModeOn := pg.multiWallet.ReadBoolConfigValueForKey("isDarkModeOn", false)
 	pg.isDarkModeOn.Value = false
 	if isDarkModeOn {
 		pg.isDarkModeOn.Value = true
 	}
 
-	isSpendUnconfirmed := pg.wal.ReadBoolConfigValueForKey(dcrlibwallet.SpendUnconfirmedConfigKey)
+	isSpendUnconfirmed := pg.multiWallet.ReadBoolConfigValueForKey(dcrlibwallet.SpendUnconfirmedConfigKey, false)
 	pg.spendUnconfirmed.Value = false
 	if isSpendUnconfirmed {
 		pg.spendUnconfirmed.Value = true
 	}
 
-	beep := pg.wal.ReadBoolConfigValueForKey(dcrlibwallet.BeepNewBlocksConfigKey)
+	beep := pg.multiWallet.ReadBoolConfigValueForKey(dcrlibwallet.BeepNewBlocksConfigKey, false)
 	pg.beepNewBlocks.Value = false
 	if beep {
 		pg.beepNewBlocks.Value = true
 	}
 
-	pg.peerAddr = pg.wal.ReadStringConfigValueForKey(dcrlibwallet.SpvPersistentPeerAddressesConfigKey)
+	pg.peerAddr = pg.multiWallet.ReadStringConfigValueForKey(dcrlibwallet.SpvPersistentPeerAddressesConfigKey)
 	pg.connectToPeer.Value = false
 	if pg.peerAddr != "" {
 		pg.peerLabel.Text = pg.peerAddr
 		pg.connectToPeer.Value = true
 	}
 
-	pg.agentValue = pg.wal.ReadStringConfigValueForKey(dcrlibwallet.UserAgentConfigKey)
+	pg.agentValue = pg.multiWallet.ReadStringConfigValueForKey(dcrlibwallet.UserAgentConfigKey)
 	pg.userAgent.Value = false
 	if pg.agentValue != "" {
 		pg.agentLabel.Text = pg.agentValue

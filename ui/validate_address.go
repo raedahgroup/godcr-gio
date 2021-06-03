@@ -8,7 +8,6 @@ import (
 
 	"github.com/planetdecred/godcr/ui/decredmaterial"
 	"github.com/planetdecred/godcr/ui/values"
-	"github.com/planetdecred/godcr/wallet"
 )
 
 const ValidateAddress = "ValidateAddress"
@@ -25,17 +24,17 @@ type validateAddressPage struct {
 	theme                 *decredmaterial.Theme
 	addressEditor         decredmaterial.Editor
 	clearBtn, validateBtn decredmaterial.Button
-	wallet                *wallet.Wallet
-	walletID              int
 	stateValidate         int
+
+	backButton decredmaterial.IconButton
+	infoButton decredmaterial.IconButton
 }
 
-func (win *Window) ValidateAddressPage(common pageCommon) Page {
+func ValidateAddressPage(common pageCommon) Page {
 	pg := &validateAddressPage{
 		theme:       common.theme,
 		validateBtn: common.theme.Button(new(widget.Clickable), "Validate"),
 		clearBtn:    common.theme.Button(new(widget.Clickable), "Clear"),
-		wallet:      common.wallet,
 		common:      common,
 	}
 
@@ -51,18 +50,25 @@ func (win *Window) ValidateAddressPage(common pageCommon) Page {
 
 	pg.stateValidate = none
 
+	pg.backButton, pg.infoButton = common.SubPageHeaderButtons()
+
 	return pg
+}
+
+func (pg *validateAddressPage) pageID() string {
+	return ValidateAddress
 }
 
 func (pg *validateAddressPage) Layout(gtx layout.Context) layout.Dimensions {
 	common := pg.common
-	pg.walletID = common.info.Wallets[*common.selectedWallet].ID
 	body := func(gtx C) D {
 		page := SubPage{
 			title: ValidateAddress,
 			back: func() {
-				common.changePage(*common.returnPage)
+				common.popPage()
 			},
+			backButton: pg.backButton,
+			infoButton: pg.infoButton,
 			body: func(gtx C) D {
 				return layout.Inset{Top: values.MarginPadding5}.Layout(gtx, func(gtx C) D {
 					return layout.Flex{Spacing: layout.SpaceBetween}.Layout(gtx,
@@ -73,7 +79,8 @@ func (pg *validateAddressPage) Layout(gtx layout.Context) layout.Dimensions {
 		}
 		return common.SubPageLayout(gtx, page)
 	}
-	return common.Layout(gtx, body)
+
+	return body(gtx)
 }
 
 func (pg *validateAddressPage) addressSection(common pageCommon) layout.Widget {
@@ -183,18 +190,15 @@ func (pg *validateAddressPage) showDisplayResult(c pageCommon) layout.Widget {
 									}),
 									layout.Rigid(func(gtx C) D {
 										if pg.stateValidate == valid {
-											walletName := c.info.Wallets[*c.selectedWallet].Name
-											if walletName != "" {
-												return layout.Inset{Left: values.MarginPadding5}.Layout(gtx, func(gtx C) D {
-													return decredmaterial.Card{
-														Color: pg.theme.Color.Surface,
-													}.Layout(gtx, func(gtx C) D {
-														walletText := pg.theme.Caption(walletName)
-														walletText.Color = pg.theme.Color.Gray
-														return walletText.Layout(gtx)
-													})
+											return layout.Inset{Left: values.MarginPadding5}.Layout(gtx, func(gtx C) D {
+												return decredmaterial.Card{
+													Color: pg.theme.Color.Surface,
+												}.Layout(gtx, func(gtx C) D {
+													walletText := pg.theme.Caption("TODO")
+													walletText.Color = pg.theme.Color.Gray
+													return walletText.Layout(gtx)
 												})
-											}
+											})
 										}
 										return layout.Dimensions{}
 									}),
@@ -248,20 +252,21 @@ func (pg *validateAddressPage) validateAddress() {
 	}
 
 	if address != "" {
-		isValid, _ := pg.wallet.IsAddressValid(address)
+		isValid := pg.common.multiWallet.IsAddressValid(address)
 		if !isValid {
 			pg.stateValidate = invalid
 			return
 		}
 
-		exist, err := pg.wallet.HaveAddress(pg.walletID, address)
-		if err != nil {
-			return
-		}
-		if !exist {
-			pg.stateValidate = notOwned
-			return
-		}
+		// exist, err := pg.wallet.HaveAddress(pg.walletID, address)
+		// if err != nil {
+		// 	return
+		// }
+		// if !exist {
+		// 	pg.stateValidate = notOwned
+		// 	return
+		// }
+		// TODO
 		pg.stateValidate = valid
 		return
 	}

@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/decred/dcrd/dcrutil"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/planetdecred/godcr/wallet"
@@ -55,15 +54,6 @@ var _ = AfterSuite(func() {
 })
 
 var _ = Describe("Wallet", func() {
-	It("can get the multi wallet info", func() {
-		wal.GetMultiWalletInfo()
-		info := <-wal.Send
-		Expect(info.Resp).To(BeAssignableToTypeOf(MultiWalletInfo{}))
-		inf := info.Resp.(MultiWalletInfo)
-		Expect(inf.LoadedWallets).To(BeEquivalentTo(1))
-		Expect(inf.TotalBalance).To(BeEquivalentTo(dcrutil.Amount(0).String()))
-		Expect(inf.Synced).To(Equal(false))
-	})
 	It("can rename a wallet", func() {
 		tempChan := make(chan error)
 		wal.RenameWallet(1, "random", tempChan)

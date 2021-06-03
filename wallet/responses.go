@@ -25,50 +25,6 @@ func ResponseResp(resp interface{}) Response {
 	}
 }
 
-// MultiWalletInfo represents bulk information about the wallets returned by the wallet backend
-type MultiWalletInfo struct {
-	LoadedWallets   int
-	TotalBalance    string
-	TotalBalanceRaw string
-	Wallets         []InfoShort
-	BestBlockHeight int32
-	BestBlockTime   int64
-	LastSyncTime    string
-	Synced          bool
-	Syncing         bool
-}
-
-// InfoShort represents basic information about a wallet
-type InfoShort struct {
-	ID               int
-	Name             string
-	Balance          string
-	Accounts         []Account
-	TotalBalance     string
-	SpendableBalance int64
-	BestBlockHeight  int32
-	BlockTimestamp   int64
-	DaysBehind       string
-	Status           string
-	IsWaiting        bool
-	Seed             []byte
-	IsWatchingOnly   bool
-}
-
-// Account represents information about a wallet's account
-type Account struct {
-	Number           int32
-	Name             string
-	SpendableBalance int64
-	Keys             struct {
-		Internal, External, Imported string
-	}
-	HDPath         string
-	TotalBalance   string
-	CurrentAddress string
-	Balance        Balance
-}
-
 // AddedAccount is sent when the wallet is done adding an account
 type AddedAccount struct {
 	ID               int32

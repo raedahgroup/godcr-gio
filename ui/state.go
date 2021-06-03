@@ -2,7 +2,6 @@ package ui
 
 import (
 	"github.com/planetdecred/dcrlibwallet"
-	"github.com/planetdecred/godcr/ui/decredmaterial"
 	"github.com/planetdecred/godcr/wallet"
 )
 
@@ -15,33 +14,6 @@ type states struct {
 // updateStates changes the wallet state based on the received update
 func (win *Window) updateStates(update interface{}) {
 	switch e := update.(type) {
-	case wallet.MultiWalletInfo:
-		if win.walletInfo.LoadedWallets == 0 && e.LoadedWallets > 0 {
-			win.changePage(PageOverview)
-		}
-		*win.walletInfo = e
-		win.states.loading = false
-
-		if e.LoadedWallets > 0 {
-			// set wallets and accounts tab when wallet info is updated
-			wallets := make([]decredmaterial.TabItem, len(e.Wallets))
-			for i := range e.Wallets {
-				wallets[i] = decredmaterial.TabItem{
-					Title: e.Wallets[i].Name,
-				}
-			}
-
-			accounts := make([]decredmaterial.TabItem, len(e.Wallets[win.selected].Accounts))
-			for i, account := range e.Wallets[win.selected].Accounts {
-				if account.Name == "imported" {
-					continue
-				}
-				accounts[i] = decredmaterial.TabItem{
-					Title: e.Wallets[win.selected].Accounts[i].Name,
-				}
-			}
-		}
-		return
 	case *wallet.Transactions:
 		win.states.loading = false
 		win.walletTransactions = e
@@ -70,16 +42,16 @@ func (win *Window) updateStates(update interface{}) {
 		return
 	case wallet.CreatedSeed:
 		win.notifyOnSuccess("Wallet created")
-		win.changePage(PageWallet)
+		win.changePage(WalletPage(win.common))
 	case wallet.Renamed:
 		win.notifyOnSuccess("Wallet renamed")
 	case wallet.Restored:
-		win.changePage(PageWallet)
+		win.changePage(WalletPage(win.common))
 		win.states.creating = false
 		win.window.Invalidate()
 	case wallet.DeletedWallet:
 		win.selected = 0
-		win.changePageAndRefresh(PageWallet)
+		win.changePageAndRefresh(WalletPage(win.common))
 		win.notifyOnSuccess("Wallet removed")
 	case wallet.AddedAccount:
 		win.notifyOnSuccess("Account created")
@@ -109,12 +81,11 @@ func (win *Window) updateStates(update interface{}) {
 	}
 
 	win.states.loading = true
-	win.wallet.GetMultiWalletInfo()
 	win.wallet.GetAllTransactions(0, 0, 0)
 	win.wallet.GetAllTickets()
 	win.wallet.GetAllProposals()
 	win.window.Invalidate()
-	log.Debugf("Updated with multiwallet info: %+v\n and window state %+v", win.walletInfo, win.states)
+	log.Debugf("Updated with window state %+v", win.states)
 }
 
 func (win *Window) notifyOnSuccess(text string) {

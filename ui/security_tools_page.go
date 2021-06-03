@@ -17,9 +17,12 @@ type securityToolsPage struct {
 	verifyMessage   *widget.Clickable
 	validateAddress *widget.Clickable
 	common          pageCommon
+
+	backButton decredmaterial.IconButton
+	infoButton decredmaterial.IconButton
 }
 
-func (win *Window) SecurityToolsPage(common pageCommon) Page {
+func SecurityToolsPage(common pageCommon) Page {
 	pg := &securityToolsPage{
 		theme:           common.theme,
 		verifyMessage:   new(widget.Clickable),
@@ -27,7 +30,13 @@ func (win *Window) SecurityToolsPage(common pageCommon) Page {
 		common:          common,
 	}
 
+	pg.backButton, pg.infoButton = common.SubPageHeaderButtons()
+
 	return pg
+}
+
+func (pg *securityToolsPage) pageID() string {
+	return PageSecurityTools
 }
 
 // main settings layout
@@ -37,8 +46,10 @@ func (pg *securityToolsPage) Layout(gtx layout.Context) layout.Dimensions {
 		page := SubPage{
 			title: "Security Tools",
 			back: func() {
-				*common.page = PageMore
+				common.popPage()
 			},
+			backButton: pg.backButton,
+			infoButton: pg.infoButton,
 			body: func(gtx C) D {
 				return layout.Inset{Top: values.MarginPadding5}.Layout(gtx, func(gtx C) D {
 					return layout.Flex{Spacing: layout.SpaceBetween}.Layout(gtx,
@@ -55,9 +66,7 @@ func (pg *securityToolsPage) Layout(gtx layout.Context) layout.Dimensions {
 		}
 		return common.SubPageLayout(gtx, page)
 	}
-	return common.Layout(gtx, func(gtx C) D {
-		return common.UniformPadding(gtx, body)
-	})
+	return pg.common.UniformPadding(gtx, body)
 }
 
 func (pg *securityToolsPage) message(common pageCommon) layout.Widget {
@@ -98,15 +107,11 @@ func (pg *securityToolsPage) pageSections(gtx layout.Context, icon *widget.Image
 func (pg *securityToolsPage) handle() {
 	common := pg.common
 	if pg.verifyMessage.Clicked() {
-		*common.returnPage = PageSecurityTools
-		common.setReturnPage(PageSecurityTools)
-		common.changePage(PageVerifyMessage)
+		common.changePage(VerifyMessagePage(common))
 	}
 
 	if pg.validateAddress.Clicked() {
-		*common.returnPage = PageSecurityTools
-		common.setReturnPage(PageSecurityTools)
-		common.changePage(ValidateAddress)
+		common.changePage(ValidateAddressPage(common))
 	}
 }
 

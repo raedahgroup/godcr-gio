@@ -13,42 +13,41 @@ const PageMore = "More"
 type morePageHandler struct {
 	clickable *widget.Clickable
 	image     *widget.Image
-	page      string
+	page      Page
 }
 
 type morePage struct {
 	common            pageCommon
 	container         layout.Flex
 	morePageListItems []morePageHandler
-	page              *string
 }
 
-func (win *Window) MorePage(common pageCommon) Page {
+func MorePage(common pageCommon) Page {
 	morePageListItems := []morePageHandler{
 		{
 			clickable: new(widget.Clickable),
 			image:     common.icons.settingsIcon,
-			page:      PageSettings,
+			page:      SettingsPage(common),
 		},
 		{
 			clickable: new(widget.Clickable),
 			image:     common.icons.securityIcon,
-			page:      PageSecurityTools,
+			page:      SecurityToolsPage(common),
 		},
 		{
 			clickable: new(widget.Clickable),
 			image:     common.icons.helpIcon,
-			page:      PageHelp,
+			page:      HelpPage(common),
 		},
 		{
 			clickable: new(widget.Clickable),
 			image:     common.icons.aboutIcon,
-			page:      PageAbout,
+			page:      AboutPage(common),
 		},
 		{
 			clickable: new(widget.Clickable),
 			image:     common.icons.debugIcon,
-			page:      PageDebug,
+			page:      DebugPage(common),
 		},
 	}
 
@@ -59,11 +58,14 @@ func (win *Window) MorePage(common pageCommon) Page {
 	pg := &morePage{
 		container:         layout.Flex{Axis: layout.Vertical},
 		morePageListItems: morePageListItems,
-		page:              &win.current,
 		common:            common,
 	}
 
 	return pg
+}
+
+func (pg *morePage) pageID() string {
+	return PageMore
 }
 
 func (pg *morePage) handleClickEvents(common pageCommon) {
@@ -82,9 +84,7 @@ func (pg *morePage) Layout(gtx layout.Context) layout.Dimensions {
 		pg.layoutMoreItems(gtx, common)
 		return layout.Dimensions{Size: gtx.Constraints.Max}
 	}
-	return common.Layout(gtx, func(gtx C) D {
-		return common.UniformPadding(gtx, container)
-	})
+	return pg.common.UniformPadding(gtx, container)
 }
 
 func (pg *morePage) layoutMoreItems(gtx layout.Context, common pageCommon) layout.Dimensions {
@@ -113,11 +113,12 @@ func (pg *morePage) layoutMoreItems(gtx layout.Context, common pageCommon) layou
 													Top:  values.MarginPadding2,
 												}.Layout(gtx, func(gtx C) D {
 													return layout.Center.Layout(gtx, func(gtx C) D {
-														page := pg.morePageListItems[i].page
-														if page == PageSecurityTools {
-															page = "Security Tools"
+														pageTitle := pg.morePageListItems[i].page.pageID()
+
+														if pageTitle == PageSecurityTools {
+															pageTitle = "Security Tools"
 														}
-														return common.theme.Body1(page).Layout(gtx)
+														return common.theme.Body1(pageTitle).Layout(gtx)
 													})
 												})
 											}),

@@ -6,12 +6,6 @@ import (
 	"github.com/planetdecred/godcr/wallet"
 )
 
-// updateSyncStatus updates the sync status in the walletInfo state.
-func (win Window) updateSyncStatus(syncing, synced bool) {
-	win.walletInfo.Syncing = syncing
-	win.walletInfo.Synced = synced
-}
-
 func (win Window) updateSyncProgress(report interface{}) {
 	status := win.walletSyncStatus
 	switch t := report.(type) {
@@ -24,7 +18,6 @@ func (win Window) updateSyncProgress(report interface{}) {
 		status.Steps = wallet.FetchHeadersSteps
 		status.CurrentBlockHeight = t.Progress.CurrentHeaderHeight
 		win.wallet.OverallBlockHeight = t.Progress.TotalHeadersToFetch
-		win.wallet.GetMultiWalletInfo()
 	case wallet.SyncAddressDiscoveryProgress:
 		status.RescanHeadersProgress = t.Progress.AddressDiscoveryProgress
 		status.Progress = t.Progress.TotalSyncProgress
@@ -38,13 +31,6 @@ func (win Window) updateSyncProgress(report interface{}) {
 		status.TotalSteps = wallet.TotalSyncSteps
 		status.Steps = wallet.RescanHeadersStep
 	case wallet.NewBlock:
-		for _, info := range win.walletInfo.Wallets {
-			if info.ID == t.WalletID {
-				win.wallet.GetAllTransactions(0, 0, 0)
-				break
-			}
-		}
-
 		beep := win.wallet.ReadBoolConfigValueForKey(dcrlibwallet.BeepNewBlocksConfigKey)
 		if beep {
 			err := beeep.Beep(5, 1)

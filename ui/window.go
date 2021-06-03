@@ -3,7 +3,6 @@ package ui
 import (
 	"errors"
 	"image"
-	"time"
 
 	"gioui.org/app"
 	"gioui.org/io/key"
@@ -26,20 +25,16 @@ type Window struct {
 	ops    *op.Ops
 
 	wallet             *wallet.Wallet
-	walletInfo         *wallet.MultiWalletInfo
+	syncStatusUpdate   chan wallet.SyncStatusUpdate
 	walletSyncStatus   *wallet.SyncStatus
 	walletTransactions *wallet.Transactions
 	walletTransaction  *wallet.Transaction
-	walletAccount      *wallet.Account
 	walletTickets      *wallet.Tickets
 	vspInfo            *wallet.VSP
 	proposals          *wallet.Proposals
-	selectedProposal   *dcrlibwallet.Proposal
 	proposal           chan *wallet.Proposal
 
 	walletUnspentOutputs *wallet.UnspentOutputs
-
-	current, previous string
 
 	signatureResult *wallet.Signature
 
@@ -52,14 +47,19 @@ type Window struct {
 
 	err string
 
-	pages                 map[string]Page
-	keyEvents             chan *key.Event
-	toast                 *toast
-	modal                 chan *modalLoad
-	sysDestroyWithSync    bool
-	walletAcctMixerStatus chan *wallet.AccountMixer
-	internalLog           chan string
-	refreshPage           bool
+	// TODO: protect with mutex
+	pageBackStack             []Page
+	currentPage, previousPage Page
+	common                    pageCommon
+
+	walletTabs, accountTabs *decredmaterial.Tabs
+	keyEvents               chan *key.Event
+	toast                   *toast
+	modal                   chan *modalLoad
+	sysDestroyWithSync      bool
+	walletAcctMixerStatus   chan *wallet.AccountMixer
+	internalLog             chan string
+	refreshPage             bool
 }
 
 type WriteClipboard struct {
@@ -87,7 +87,7 @@ func CreateWindow(wal *wallet.Wallet, decredIcons map[string]image.Image, collec
 	win.theme = theme
 	win.ops = &op.Ops{}
 
-	win.walletInfo = new(wallet.MultiWalletInfo)
+	win.syncStatusUpdate = make(chan wallet.SyncStatusUpdate, 10)
 	win.walletSyncStatus = new(wallet.SyncStatus)
 	win.walletTransactions = new(wallet.Transactions)
 	win.walletUnspentOutputs = new(wallet.UnspentOutputs)
@@ -98,25 +98,29 @@ func CreateWindow(wal *wallet.Wallet, decredIcons map[string]image.Image, collec
 	win.proposal = make(chan *wallet.Proposal)
 
 	win.wallet = wal
-	win.states.loading = true
-	win.current = PageOverview
+	win.states.loading = false
+
 	win.keyEvents = make(chan *key.Event)
 	win.modal = make(chan *modalLoad)
 
 	win.internalLog = internalLog
 
-	win.addPages(decredIcons)
+	wal.MultiWallet().AddSyncProgressListener(win, "window") // register for sync notifications
+	win.common = win.loadPageCommon(decredIcons, wal.MultiWallet())
+	win.currentPage = MainPage(win.common) // TODO
 
 	return win, nil
 }
 
-func (win *Window) changePage(page string) {
-	win.pages[win.current].onClose()
-	win.current = page
+func (win *Window) changePage(page Page) {
+	win.currentPage.onClose()
+	win.pageBackStack = append(win.pageBackStack, win.currentPage)
+
+	win.currentPage = page
 	win.refresh()
 }
 
-func (win *Window) changePageAndRefresh(page string) {
+func (win *Window) changePageAndRefresh(page Page) {
 	win.refreshPage = true
 	win.changePage(page)
 }
@@ -125,8 +129,26 @@ func (win *Window) refresh() {
 	win.window.Invalidate()
 }
 
-func (win *Window) setReturnPage(from string) {
-	win.previous = from
+// popPage goes back to the previous page
+func (win *Window) popPage() {
+	if len(win.pageBackStack) > 0 {
+		// get and remove last page
+		previousPage := win.pageBackStack[len(win.pageBackStack)-1]
+		win.pageBackStack = win.pageBackStack[:len(win.pageBackStack)-1]
+
+		win.currentPage.onClose()
+		win.currentPage = previousPage
+		win.refresh()
+	}
+}
+
+func (win *Window) popToPage(pageID string) error {
+	// TODO
+	return errors.New("not implemented")
+}
+
+func (win *Window) setReturnPage(from Page) {
+	win.previousPage = from
 	win.refresh()
 }
 
@@ -174,8 +196,8 @@ func (win *Window) Loop(shutdown chan int) {
 				}
 				win.err = err
 				if win.states.loading {
-					log.Warn("Attemping to get multiwallet info")
-					win.wallet.GetMultiWalletInfo()
+					log.Warn("NOT Attemping to get multiwallet info")
+					// win.wallet.GetMultiWalletInfo()
 				}
 
 				win.window.Invalidate()
@@ -191,19 +213,14 @@ func (win *Window) Loop(shutdown chan int) {
 					close(shutdown)
 					return
 				}
-				win.updateSyncStatus(false, true)
 			case wallet.SyncStarted:
 				// dcrlibwallet triggers the SyncStart method several times
 				// without sending a SyncComplete signal when sync is done.
-				if !win.walletInfo.Synced {
-					win.updateSyncStatus(true, false)
-				}
 			case wallet.SyncCanceled:
 				if win.sysDestroyWithSync {
 					close(shutdown)
 					return
 				}
-				win.updateSyncStatus(false, false)
 			case wallet.HeadersFetchProgress:
 				win.updateSyncProgress(update.ProgressReport)
 			case wallet.AddressDiscoveryProgress:
@@ -213,9 +230,8 @@ func (win *Window) Loop(shutdown chan int) {
 			case wallet.PeersConnected:
 				win.updateConnectedPeers(update.ConnectedPeers)
 			case wallet.BlockAttached:
-				if win.walletInfo.Synced {
+				if win.wallet.IsSynced() {
 					win.wallet.GetAllTickets()
-					win.wallet.GetMultiWalletInfo()
 					win.updateSyncProgress(update.BlockInfo)
 				}
 			case wallet.BlockConfirmed:
@@ -234,7 +250,7 @@ func (win *Window) Loop(shutdown chan int) {
 		case e := <-win.window.Events():
 			switch evt := e.(type) {
 			case system.DestroyEvent:
-				if win.walletInfo.Syncing || win.walletInfo.Synced {
+				if win.wallet.IsConnectedToDecredWallet() {
 					win.sysDestroyWithSync = true
 					win.wallet.CancelSync()
 				} else {
@@ -242,17 +258,17 @@ func (win *Window) Loop(shutdown chan int) {
 				}
 			case system.FrameEvent:
 				gtx := layout.NewContext(win.ops, evt)
-				ts := int64(time.Since(time.Unix(win.walletInfo.BestBlockTime, 0)).Seconds())
-				win.walletInfo.LastSyncTime = wallet.SecondsToDays(ts)
+				// ts := int64(time.Since(time.Unix(win.walletInfo.BestBlockTime, 0)).Seconds())
+				// win.walletInfo.LastSyncTime = wallet.SecondsToDays(ts)
 				s := win.states
-				if win.walletInfo.LoadedWallets == 0 {
-					win.changePage(PageCreateRestore)
-				}
+				// if win.walletInfo.LoadedWallets == 0 {
+				// 	win.changePage(PageCreateRestore)
+				// }
 
 				if s.loading {
 					win.Loading(gtx)
 				} else {
-					win.layoutPage(gtx, win.pages[win.current])
+					win.layoutPage(gtx, win.currentPage)
 				}
 
 				evt.Frame(win.ops)

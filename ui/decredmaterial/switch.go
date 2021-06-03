@@ -102,6 +102,10 @@ func (s *SwitchButtonText) handleClickEvent() {
 	}
 }
 
+func (s *SwitchButtonText) SelectedIndex() int {
+	return s.selected
+}
+
 func (s *SwitchButtonText) SelectedOption() string {
 	return s.items[s.selected].Text
 }

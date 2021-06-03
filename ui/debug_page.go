@@ -13,21 +13,24 @@ const PageDebug = "Debug"
 type debugItem struct {
 	clickable *widget.Clickable
 	text      string
-	page      string
+	page      Page
 }
 
 type debugPage struct {
 	theme      *decredmaterial.Theme
 	debugItems []debugItem
 	common     pageCommon
+
+	backButton decredmaterial.IconButton
+	infoButton decredmaterial.IconButton
 }
 
-func (win *Window) DebugPage(common pageCommon) Page {
+func DebugPage(common pageCommon) Page {
 	debugItems := []debugItem{
 		{
 			clickable: new(widget.Clickable),
 			text:      "Check wallet logs",
-			page:      PageLog,
+			page:      LogPage(common),
 		},
 	}
 
@@ -37,7 +40,13 @@ func (win *Window) DebugPage(common pageCommon) Page {
 		common:     common,
 	}
 
+	pg.backButton, pg.infoButton = common.SubPageHeaderButtons()
+
 	return pg
+}
+
+func (pg *debugPage) pageID() string {
+	return PageDebug
 }
 
 func (pg *debugPage) handle() {
@@ -84,8 +93,10 @@ func (pg *debugPage) Layout(gtx C) D {
 		page := SubPage{
 			title: "Debug",
 			back: func() {
-				pg.common.changePage(PageMore)
+				pg.common.changePage(MorePage(pg.common))
 			},
+			backButton: pg.backButton,
+			infoButton: pg.infoButton,
 			body: func(gtx C) D {
 				pg.layoutDebugItems(gtx, pg.common)
 				return layout.Dimensions{Size: gtx.Constraints.Max}
@@ -94,7 +105,6 @@ func (pg *debugPage) Layout(gtx C) D {
 		return pg.common.SubPageLayout(gtx, page)
 
 	}
-	return pg.common.Layout(gtx, func(gtx C) D {
-		return pg.common.UniformPadding(gtx, container)
-	})
+
+	return pg.common.UniformPadding(gtx, container)
 }

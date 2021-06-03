@@ -215,6 +215,21 @@ func (wal *Wallet) BroadcastTransaction(txAuthor *dcrlibwallet.TxAuthor, passphr
 	}()
 }
 
+func (wal *Wallet) GetTransactions(offset, limit, txfilter int32, newestFirst bool) ([]dcrlibwallet.Transaction, error) {
+	transactionsJSON, err := wal.multi.GetTransactions(offset, limit, txfilter, true)
+	if err != nil {
+		return nil, err
+	}
+
+	var transactions []dcrlibwallet.Transaction
+	err = json.Unmarshal([]byte(transactionsJSON), &transactions)
+	if err != nil {
+		return nil, err
+	}
+
+	return transactions, nil
+}
+
 // GetAllTransactions collects a per-wallet slice of transactions fitting the parameters.
 // It is non-blocking and sends its result or any error to wal.Send.
 func (wal *Wallet) GetAllTransactions(offset, limit, txfilter int32) {
@@ -332,117 +347,6 @@ func walletSyncStatus(isWaiting bool, walletBestBlock, bestBlockHeight int32) st
 	}
 
 	return "synced"
-}
-
-// GetMultiWalletInfo gets bulk information about the loaded wallets.
-// Information regarding transactions is collected with respect to wal.confirms as the
-// number of required confirmations for said transactions.
-// It is non-blocking and sends its result or any error to wal.Send.
-func (wal *Wallet) GetMultiWalletInfo() {
-	go func() {
-		log.Debug("Getting multiwallet info")
-		var resp Response
-		wallets, err := wal.wallets()
-		if err != nil {
-			resp.Err = err
-			wal.Send <- resp
-			return
-		}
-
-		var completeTotal int64
-		infos := make([]InfoShort, len(wallets))
-		i := 0
-		for _, wall := range wallets {
-			iter, err := wall.AccountsIterator()
-			if err != nil {
-				resp.Err = err
-				wal.Send <- resp
-				return
-			}
-			var acctBalance, spendableBalance int64
-			accts := make([]Account, 0)
-			for acct := iter.Next(); acct != nil; acct = iter.Next() {
-				var addr string
-				if acct.Number != math.MaxInt32 {
-					var er error
-					addr, er = wall.CurrentAddress(acct.Number)
-					if er != nil {
-						log.Error("Could not get current address for wallet ", wall.ID, "account", acct.Number)
-					}
-				}
-				accts = append(accts, Account{
-					Number:           acct.Number,
-					Name:             acct.Name,
-					TotalBalance:     dcrutil.Amount(acct.TotalBalance).String(),
-					SpendableBalance: acct.Balance.Spendable,
-					Balance: Balance{
-						Total:                   acct.Balance.Total,
-						Spendable:               acct.Balance.Spendable,
-						ImmatureReward:          acct.Balance.ImmatureReward,
-						ImmatureStakeGeneration: acct.Balance.ImmatureStakeGeneration,
-						LockedByTickets:         acct.Balance.LockedByTickets,
-						VotingAuthority:         acct.Balance.VotingAuthority,
-						UnConfirmed:             acct.Balance.UnConfirmed,
-					},
-					Keys: struct {
-						Internal, External, Imported string
-					}{
-						Internal: strconv.Itoa(int(acct.InternalKeyCount)),
-						External: strconv.Itoa(int(acct.ExternalKeyCount)),
-						Imported: strconv.Itoa(int(acct.ImportedKeyCount)),
-					},
-					HDPath:         wal.hdPrefix() + strconv.Itoa(int(acct.Number)) + "'",
-					CurrentAddress: addr,
-				})
-				acctBalance += acct.TotalBalance
-				spendableBalance += acct.Balance.Spendable
-			}
-			completeTotal += acctBalance
-
-			infos[i] = InfoShort{
-				ID:               wall.ID,
-				Name:             wall.Name,
-				Balance:          dcrutil.Amount(acctBalance).String(),
-				SpendableBalance: spendableBalance,
-				Accounts:         accts,
-				BestBlockHeight:  wall.GetBestBlock(),
-				BlockTimestamp:   wall.GetBestBlockTimeStamp(),
-				DaysBehind:       fmt.Sprintf("%s behind", calculateDaysBehind(wall.GetBestBlockTimeStamp())),
-				Status:           walletSyncStatus(wall.IsWaiting(), wall.GetBestBlock(), wal.OverallBlockHeight),
-				Seed:             wall.EncryptedSeed,
-				IsWatchingOnly:   wall.IsWatchingOnlyWallet(),
-			}
-			i++
-		}
-
-		best := wal.multi.GetBestBlock()
-
-		if best == nil {
-			if len(wallets) == 0 {
-				wal.Send <- ResponseResp(MultiWalletInfo{})
-				return
-			}
-			resp.Err = InternalWalletError{
-				Message: "Could not get load best block",
-			}
-			wal.Send <- resp
-			return
-		}
-
-		lastSyncTime := int64(time.Since(time.Unix(best.Timestamp, 0)).Seconds())
-		resp.Resp = MultiWalletInfo{
-			LoadedWallets:   len(wallets),
-			TotalBalance:    dcrutil.Amount(completeTotal).String(),
-			TotalBalanceRaw: GetRawBalance(completeTotal, 0),
-			BestBlockHeight: best.Height,
-			BestBlockTime:   best.Timestamp,
-			LastSyncTime:    SecondsToDays(lastSyncTime),
-			Wallets:         infos,
-			Synced:          wal.multi.IsSynced(),
-			Syncing:         wal.multi.IsSyncing(),
-		}
-		wal.Send <- resp
-	}()
 }
 
 func (wal *Wallet) SignMessage(walletID int, passphrase []byte, address, message string, errChan chan error) {
@@ -669,20 +573,8 @@ func (wal *Wallet) RenameAccount(walletID int, acct int32, name string, errChan 
 	}()
 }
 
-func (wal *Wallet) GetAllProposals() {
-	var resp Response
-	go func() {
-		proposals, err := wal.multi.Politeia.GetProposalsRaw(dcrlibwallet.ProposalCategoryAll, 0, 0, true)
-		if err != nil {
-			resp.Err = err
-			wal.Send <- resp
-			return
-		}
-		resp.Resp = &Proposals{
-			Proposals: proposals,
-		}
-		wal.Send <- resp
-	}()
+func (wal *Wallet) GetAllProposals() ([]dcrlibwallet.Proposal, error) {
+	return wal.multi.Politeia.GetProposalsRaw(dcrlibwallet.ProposalCategoryAll, 0, 0, true)
 }
 
 func (wal *Wallet) FetchProposalDescription(token string) (string, error) {
@@ -733,6 +625,22 @@ func (wal *Wallet) VerifyMessage(address string, message string, signature strin
 // StartSync starts the multiwallet SPV sync
 func (wal *Wallet) StartSync() error {
 	return wal.multi.SpvSync()
+}
+
+func (wal *Wallet) IsConnectedToDecredWallet() bool {
+	return wal.multi.IsConnectedToDecredNetwork()
+}
+
+func (wal *Wallet) IsSynced() bool {
+	return wal.multi.IsSynced()
+}
+
+func (wal *Wallet) IsSyncing() bool {
+	return wal.multi.IsSyncing()
+}
+
+func (wal *Wallet) BestBlock() *dcrlibwallet.BlockInfo {
+	return wal.multi.GetBestBlock()
 }
 
 // RescanBlocks rescans the multiwallet
@@ -1035,137 +943,127 @@ func (wal *Wallet) PurchaseTicket(walletID int, accountID int32, tickets uint32,
 
 // GetAllTickets collects a per-wallet slice of tickets fitting the parameters.
 // It is non-blocking and sends its result or any error to wal.Send.
-func (wal *Wallet) GetAllTickets() {
-	go func() {
-		var resp Response
-		wallets, err := wal.wallets()
+func (wal *Wallet) GetAllTickets() (*Tickets, error) {
+	wallets, err := wal.wallets()
+	if err != nil {
+		return nil, err
+	}
+
+	var liveRecentTickets []Ticket
+	var recentActivity []Ticket
+
+	tickets := make(map[int][]Ticket)
+	unconfirmedTickets := make(map[int][]UnconfirmedPurchase)
+
+	stackingRecordCounter := []struct {
+		Status string
+		Count  int
+	}{
+		{"UNMINED", 0},
+		{"IMMATURE", 0},
+		{"LIVE", 0},
+		{"VOTED", 0},
+		{"MISSED", 0},
+		{"EXPIRED", 0},
+		{"REVOKED", 0},
+	}
+
+	liveCounter := []struct {
+		Status string
+		Count  int
+	}{
+		{"UNMINED", 0},
+		{"IMMATURE", 0},
+		{"LIVE", 0},
+	}
+
+	for _, wall := range wallets {
+		ticketsInfo, err := wall.GetTicketsForBlockHeightRange(0, wall.GetBestBlock(), math.MaxInt32)
 		if err != nil {
-			resp.Err = err
-			wal.Send <- resp
-			return
+			return nil, err
 		}
 
-		var liveRecentTickets []Ticket
-		var recentActivity []Ticket
-
-		tickets := make(map[int][]Ticket)
-		unconfirmedTickets := make(map[int][]UnconfirmedPurchase)
-
-		stackingRecordCounter := []struct {
-			Status string
-			Count  int
-		}{
-			{"UNMINED", 0},
-			{"IMMATURE", 0},
-			{"LIVE", 0},
-			{"VOTED", 0},
-			{"MISSED", 0},
-			{"EXPIRED", 0},
-			{"REVOKED", 0},
-		}
-
-		liveCounter := []struct {
-			Status string
-			Count  int
-		}{
-			{"UNMINED", 0},
-			{"IMMATURE", 0},
-			{"LIVE", 0},
-		}
-
-		for _, wall := range wallets {
-			ticketsInfo, err := wall.GetTicketsForBlockHeightRange(0, wall.GetBestBlock(), math.MaxInt32)
-			if err != nil {
-				resp.Err = err
-				wal.Send <- resp
-				return
+		for _, tinfo := range ticketsInfo {
+			if tinfo.Status == "UNKNOWN" {
+				continue
 			}
 
-			for _, tinfo := range ticketsInfo {
-				if tinfo.Status == "UNKNOWN" {
-					continue
-				}
+			var amount dcrutil.Amount
+			for _, output := range tinfo.Ticket.MyOutputs {
+				amount += output.Amount
+			}
+			info := Ticket{
+				Info:       *tinfo,
+				DateTime:   time.Unix(tinfo.Ticket.Timestamp, 0).Format("Jan 2, 2006 03:04:05 PM"),
+				MonthDay:   time.Unix(tinfo.Ticket.Timestamp, 0).Format("Jan 2"),
+				DaysBehind: calculateDaysBehind(tinfo.Ticket.Timestamp),
+				Amount:     amount.String(),
+				Fee:        tinfo.Ticket.Fee.String(),
+				WalletName: wall.Name,
+			}
+			tickets[wall.ID] = append(tickets[wall.ID], info)
 
-				var amount dcrutil.Amount
-				for _, output := range tinfo.Ticket.MyOutputs {
-					amount += output.Amount
-				}
-				info := Ticket{
-					Info:       *tinfo,
-					DateTime:   time.Unix(tinfo.Ticket.Timestamp, 0).Format("Jan 2, 2006 03:04:05 PM"),
-					MonthDay:   time.Unix(tinfo.Ticket.Timestamp, 0).Format("Jan 2"),
-					DaysBehind: calculateDaysBehind(tinfo.Ticket.Timestamp),
-					Amount:     amount.String(),
-					Fee:        tinfo.Ticket.Fee.String(),
-					WalletName: wall.Name,
-				}
-				tickets[wall.ID] = append(tickets[wall.ID], info)
-
-				for i := range liveCounter {
-					if liveCounter[i].Status == tinfo.Status {
-						liveCounter[i].Count++
-					}
-				}
-
-				if tinfo.Status == "UNMINED" || tinfo.Status == "IMMATURE" || tinfo.Status == "LIVE" {
-					liveRecentTickets = append(liveRecentTickets, info)
-				}
-
-				recentActivity = append(recentActivity, info)
-
-				for i := range stackingRecordCounter {
-					if stackingRecordCounter[i].Status == tinfo.Status {
-						stackingRecordCounter[i].Count++
-					}
+			for i := range liveCounter {
+				if liveCounter[i].Status == tinfo.Status {
+					liveCounter[i].Count++
 				}
 			}
 
-			sort.SliceStable(tickets[wall.ID], func(i, j int) bool {
-				backTime := time.Unix(tickets[wall.ID][j].Info.Ticket.Timestamp, 0)
-				frontTime := time.Unix(tickets[wall.ID][i].Info.Ticket.Timestamp, 0)
-				return backTime.Before(frontTime)
-			})
-
-			unconfirmedTicketPurchases, err := getUnconfirmedPurchases(wall, tickets[wall.ID])
-			if err != nil {
-				resp.Err = err
-				wal.Send <- resp
-				return
+			if tinfo.Status == "UNMINED" || tinfo.Status == "IMMATURE" || tinfo.Status == "LIVE" {
+				liveRecentTickets = append(liveRecentTickets, info)
 			}
-			unconfirmedTickets[wall.ID] = unconfirmedTicketPurchases
+
+			recentActivity = append(recentActivity, info)
+
+			for i := range stackingRecordCounter {
+				if stackingRecordCounter[i].Status == tinfo.Status {
+					stackingRecordCounter[i].Count++
+				}
+			}
 		}
 
-		sort.SliceStable(liveRecentTickets, func(i, j int) bool {
-			backTime := time.Unix(liveRecentTickets[j].Info.Ticket.Timestamp, 0)
-			frontTime := time.Unix(liveRecentTickets[i].Info.Ticket.Timestamp, 0)
+		sort.SliceStable(tickets[wall.ID], func(i, j int) bool {
+			backTime := time.Unix(tickets[wall.ID][j].Info.Ticket.Timestamp, 0)
+			frontTime := time.Unix(tickets[wall.ID][i].Info.Ticket.Timestamp, 0)
 			return backTime.Before(frontTime)
 		})
 
-		recentLimit := 5
-		if len(liveRecentTickets) > recentLimit {
-			liveRecentTickets = liveRecentTickets[:recentLimit]
+		unconfirmedTicketPurchases, err := getUnconfirmedPurchases(wall, tickets[wall.ID])
+		if err != nil {
+			return nil, err
 		}
+		unconfirmedTickets[wall.ID] = unconfirmedTicketPurchases
+	}
 
-		sort.SliceStable(recentActivity, func(i, j int) bool {
-			backTime := time.Unix(recentActivity[j].Info.Ticket.Timestamp, 0)
-			frontTime := time.Unix(recentActivity[i].Info.Ticket.Timestamp, 0)
-			return backTime.Before(frontTime)
-		})
+	sort.SliceStable(liveRecentTickets, func(i, j int) bool {
+		backTime := time.Unix(liveRecentTickets[j].Info.Ticket.Timestamp, 0)
+		frontTime := time.Unix(liveRecentTickets[i].Info.Ticket.Timestamp, 0)
+		return backTime.Before(frontTime)
+	})
 
-		if len(recentActivity) > recentLimit {
-			recentActivity = recentActivity[:recentLimit]
-		}
+	recentLimit := 5
+	if len(liveRecentTickets) > recentLimit {
+		liveRecentTickets = liveRecentTickets[:recentLimit]
+	}
 
-		resp.Resp = &Tickets{
-			Confirmed:             tickets,
-			Unconfirmed:           unconfirmedTickets,
-			RecentActivity:        recentActivity,
-			StackingRecordCounter: stackingRecordCounter,
-			LiveRecent:            liveRecentTickets,
-			LiveCounter:           liveCounter,
-		}
-		wal.Send <- resp
-	}()
+	sort.SliceStable(recentActivity, func(i, j int) bool {
+		backTime := time.Unix(recentActivity[j].Info.Ticket.Timestamp, 0)
+		frontTime := time.Unix(recentActivity[i].Info.Ticket.Timestamp, 0)
+		return backTime.Before(frontTime)
+	})
+
+	if len(recentActivity) > recentLimit {
+		recentActivity = recentActivity[:recentLimit]
+	}
+
+	return &Tickets{
+		Confirmed:             tickets,
+		Unconfirmed:           unconfirmedTickets,
+		RecentActivity:        recentActivity,
+		StackingRecordCounter: stackingRecordCounter,
+		LiveRecent:            liveRecentTickets,
+		LiveCounter:           liveCounter,
+	}, nil
 }
 
 func getUnconfirmedPurchases(wall dcrlibwallet.Wallet, tickets []Ticket) (unconfirmed []UnconfirmedPurchase, err error) {
@@ -1245,6 +1143,10 @@ func (wal *Wallet) AllWallets() []*dcrlibwallet.Wallet {
 	return wal.multi.AllWallets()
 }
 
+func (wal *Wallet) WalletWithID(walletID int) *dcrlibwallet.Wallet {
+	return wal.multi.WalletWithID(walletID)
+}
+
 func (wal *Wallet) ReadMixerConfigValueForKey(key string, walletID int) int32 {
 	wallet := wal.multi.WalletWithID(walletID)
 	if wallet != nil {
@@ -1273,7 +1175,7 @@ func (wal *Wallet) AddVSP(host string, errChan chan error) {
 			}
 		}
 
-		info, err := getVSPInfo(host)
+		info, err := GetVSPInfo(host)
 		if err != nil {
 			go func() {
 				errChan <- err
@@ -1314,7 +1216,7 @@ func (wal *Wallet) GetAllVSP() {
 		var loadedVSP []VSPInfo
 
 		for _, host := range valueOut.List {
-			v, err := getVSPInfo(host)
+			v, err := GetVSPInfo(host)
 			if err == nil {
 				loadedVSP = append(loadedVSP, VSPInfo{
 					Host: host,
@@ -1323,7 +1225,7 @@ func (wal *Wallet) GetAllVSP() {
 			}
 		}
 
-		l, _ := getInitVSPInfo("https://api.decred.org/?c=vsp")
+		l, _ := GetInitVSPInfo("https://api.decred.org/?c=vsp")
 		for h, v := range l {
 			if strings.Contains(wal.Net, v.Network) {
 				loadedVSP = append(loadedVSP, VSPInfo{
@@ -1361,7 +1263,7 @@ func (wal *Wallet) GetRememberVSP() string {
 }
 
 // getVSPInfo returns the information of the specified VSP base URL
-func getVSPInfo(url string) (*dcrlibwallet.GetVspInfoResponse, error) {
+func GetVSPInfo(url string) (*dcrlibwallet.GetVspInfoResponse, error) {
 	rq := new(http.Client)
 	resp, err := rq.Get((url + "/api/v3/vspinfo"))
 
@@ -1393,7 +1295,7 @@ func getVSPInfo(url string) (*dcrlibwallet.GetVspInfoResponse, error) {
 }
 
 // getInitVSPInfo returns the list information of the VSP
-func getInitVSPInfo(url string) (map[string]*dcrlibwallet.GetVspInfoResponse, error) {
+func GetInitVSPInfo(url string) (map[string]*dcrlibwallet.GetVspInfoResponse, error) {
 	rq := new(http.Client)
 	resp, err := rq.Get((url))
 	if err != nil {

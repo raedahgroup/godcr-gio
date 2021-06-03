@@ -101,6 +101,9 @@ func (c *DropDown) Changed() bool {
 		if index != 0 {
 			for c.items[index].button.Button.Clicked() {
 				if c.items[0].label.Text != c.items[index].Text {
+					c.selectedIndex = index
+					c.items[0].label.Text = c.items[index].Text
+					c.isOpen = false
 					return true
 				}
 			}

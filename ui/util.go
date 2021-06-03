@@ -106,6 +106,14 @@ func formatUSDBalance(p *message.Printer, balance float64) string {
 	return p.Sprintf("$%.2f", balance)
 }
 
+func dcrTOUSD(exchangeRate, dcr float64) float64 {
+	return dcr * exchangeRate
+}
+
+func usdToDCR(exchangeRate, usd float64) float64 {
+	return usd / exchangeRate
+}
+
 func goToURL(url string) {
 	var err error
 

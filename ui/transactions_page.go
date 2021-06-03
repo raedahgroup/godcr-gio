@@ -2,7 +2,6 @@ package ui
 
 import (
 	"image"
-	"sort"
 	"time"
 
 	"gioui.org/f32"
@@ -16,7 +15,6 @@ import (
 	"github.com/planetdecred/dcrlibwallet"
 	"github.com/planetdecred/godcr/ui/decredmaterial"
 	"github.com/planetdecred/godcr/ui/values"
-	"github.com/planetdecred/godcr/wallet"
 )
 
 const PageTransactions = "Transactions"
@@ -30,9 +28,6 @@ type transactionWdg struct {
 type transactionsPage struct {
 	container                   layout.Flex
 	txsList                     layout.List
-	walletTransactions          **wallet.Transactions
-	walletTransaction           **wallet.Transaction
-	filterSorter                int
 	filterDirection, filterSort []decredmaterial.RadioButton
 	toTxnDetails                []*gesture.Click
 	separator                   decredmaterial.Line
@@ -42,17 +37,20 @@ type transactionsPage struct {
 	orderDropDown  *decredmaterial.DropDown
 	txTypeDropDown *decredmaterial.DropDown
 	walletDropDown *decredmaterial.DropDown
+
+	wallets      []*dcrlibwallet.Wallet
+	transactions []dcrlibwallet.Transaction
 }
 
-func (win *Window) TransactionsPage(common pageCommon) Page {
+func TransactionsPage(common pageCommon) Page {
 	pg := &transactionsPage{
-		common:             common,
-		container:          layout.Flex{Axis: layout.Vertical},
-		txsList:            layout.List{Axis: layout.Vertical},
-		walletTransactions: &win.walletTransactions,
-		walletTransaction:  &win.walletTransaction,
-		separator:          common.theme.Separator(),
-		theme:              common.theme,
+		common:    common,
+		container: layout.Flex{Axis: layout.Vertical},
+		txsList:   layout.List{Axis: layout.Vertical},
+		separator: common.theme.Separator(),
+		theme:     common.theme,
+
+		wallets: common.multiWallet.AllWallets(),
 	}
 
 	pg.orderDropDown = common.theme.DropDown([]decredmaterial.DropDownItem{{Text: values.String(values.StrNewest)},
@@ -75,37 +73,53 @@ func (win *Window) TransactionsPage(common pageCommon) Page {
 		},
 	}, 1)
 
-	return pg
-}
-
-func (pg *transactionsPage) setWallets(common pageCommon) {
-	if len(common.info.Wallets) == 0 || pg.walletDropDown != nil {
-		return
-	}
-
 	var walletDropDownItems []decredmaterial.DropDownItem
-	for i := range common.info.Wallets {
+	for _, wal := range pg.wallets {
 		item := decredmaterial.DropDownItem{
-			Text: common.info.Wallets[i].Name,
+			Text: wal.Name,
 			Icon: common.icons.walletIcon,
 		}
 		walletDropDownItems = append(walletDropDownItems, item)
 	}
 	pg.walletDropDown = common.theme.DropDown(walletDropDownItems, 2)
+
+	pg.loadTransactions()
+
+	return pg
+}
+
+func (pg *transactionsPage) pageID() string {
+	return PageTransactions
+}
+
+func (pg *transactionsPage) loadTransactions() {
+	selectedWallet := pg.wallets[pg.walletDropDown.SelectedIndex()]
+	newestFirst := pg.orderDropDown.SelectedIndex() == 0
+
+	txFilter := dcrlibwallet.TxFilterAll
+	switch pg.txTypeDropDown.SelectedIndex() {
+	case 1:
+		txFilter = dcrlibwallet.TxFilterSent
+	case 2:
+		txFilter = dcrlibwallet.TxFilterReceived
+	case 3:
+		txFilter = dcrlibwallet.TxFilterTransferred
+	case 4:
+		txFilter = dcrlibwallet.TxFilterStaking
+	}
+
+	wallTxs, err := selectedWallet.GetTransactionsRaw(0, 0, txFilter, newestFirst) //TODO
+	if err != nil {
+		log.Error("Error loading transactions:", err)
+	} else {
+		pg.transactions = wallTxs
+	}
+
 }
 
 func (pg *transactionsPage) Layout(gtx layout.Context) layout.Dimensions {
 	common := pg.common
-	pg.setWallets(common)
 	container := func(gtx C) D {
-		walletID := common.info.Wallets[pg.walletDropDown.SelectedIndex()].ID
-		wallTxs := (*pg.walletTransactions).Txs[walletID]
-		if pg.txTypeDropDown.SelectedIndex()-1 != -1 {
-			wallTxs = filterTransactions(wallTxs, func(i int) bool {
-				return i == pg.txTypeDropDown.SelectedIndex()-1
-			})
-		}
-
 		return layout.Stack{Alignment: layout.N}.Layout(gtx,
 			layout.Expanded(func(gtx C) D {
 				return layout.Inset{
@@ -116,7 +130,7 @@ func (pg *transactionsPage) Layout(gtx layout.Context) layout.Dimensions {
 						return Container{layout.Inset{Bottom: padding, Left: padding}}.Layout(gtx,
 							func(gtx C) D {
 								// return "No transactions yet" text if there are no transactions
-								if len(wallTxs) == 0 {
+								if len(pg.transactions) == 0 {
 									gtx.Constraints.Min.X = gtx.Constraints.Max.X
 									txt := common.theme.Body1(values.String(values.StrNoTransactionsYet))
 									txt.Color = common.theme.Color.Gray2
@@ -125,17 +139,17 @@ func (pg *transactionsPage) Layout(gtx layout.Context) layout.Dimensions {
 
 								// update transaction row click gesture when the length of the click gesture slice and
 								// transactions list are different.
-								if len(wallTxs) != len(pg.toTxnDetails) {
-									pg.toTxnDetails = createClickGestures(len(wallTxs))
+								if len(pg.transactions) != len(pg.toTxnDetails) {
+									pg.toTxnDetails = createClickGestures(len(pg.transactions))
 								}
 
-								return pg.txsList.Layout(gtx, len(wallTxs), func(gtx C, index int) D {
+								return pg.txsList.Layout(gtx, len(pg.transactions), func(gtx C, index int) D {
 									click := pg.toTxnDetails[index]
 									pointer.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Add(gtx.Ops)
 									click.Add(gtx.Ops)
-									pg.goToTxnDetails(click.Events(gtx), &common, &wallTxs[index])
+									pg.goToTxnDetails(click.Events(gtx), &common, &pg.transactions[index])
 									var row = TransactionRow{
-										transaction: wallTxs[index],
+										transaction: pg.transactions[index],
 										index:       index,
 										showBadge:   false,
 									}
@@ -148,19 +162,7 @@ func (pg *transactionsPage) Layout(gtx layout.Context) layout.Dimensions {
 			layout.Stacked(pg.dropDowns),
 		)
 	}
-	return common.Layout(gtx, func(gtx C) D {
-		return common.UniformPadding(gtx, container)
-	})
-}
-
-func filterTransactions(transactions []wallet.Transaction, f func(int) bool) []wallet.Transaction {
-	t := make([]wallet.Transaction, 0)
-	for _, v := range transactions {
-		if f(int(v.Txn.Direction)) {
-			t = append(t, v)
-		}
-	}
-	return t
+	return common.UniformPadding(gtx, container)
 }
 
 func (pg *transactionsPage) dropDowns(gtx layout.Context) layout.Dimensions {
@@ -226,59 +228,55 @@ func (pg *transactionsPage) txsFilters(common *pageCommon) layout.Widget {
 }
 
 func (pg *transactionsPage) handle() {
-	common := pg.common
-	sortSelection := pg.orderDropDown.SelectedIndex()
 
-	if pg.filterSorter != sortSelection {
-		pg.filterSorter = sortSelection
-		pg.sortTransactions(&common)
+	for pg.txTypeDropDown.Changed() {
+		pg.loadTransactions()
+	}
+
+	for pg.orderDropDown.Changed() {
+		pg.loadTransactions()
+	}
+
+	for pg.walletDropDown.Changed() {
+		pg.loadTransactions()
 	}
 }
 
-func (pg *transactionsPage) sortTransactions(common *pageCommon) {
-	newestFirst := pg.filterSorter == 0
-
-	for _, wal := range common.info.Wallets {
-		transactions := (*pg.walletTransactions).Txs[wal.ID]
-		sort.SliceStable(transactions, func(i, j int) bool {
-			backTime := time.Unix(transactions[j].Txn.Timestamp, 0)
-			frontTime := time.Unix(transactions[i].Txn.Timestamp, 0)
-			if newestFirst {
-				return backTime.Before(frontTime)
-			}
-			return frontTime.Before(backTime)
-		})
-	}
-}
-
-func (pg *transactionsPage) goToTxnDetails(events []gesture.ClickEvent, common *pageCommon, txn *wallet.Transaction) {
+func (pg *transactionsPage) goToTxnDetails(events []gesture.ClickEvent, common *pageCommon, txn *dcrlibwallet.Transaction) {
 	for _, e := range events {
 		if e.Type == gesture.TypeClick {
-			*pg.walletTransaction = txn
-
-			common.setReturnPage(PageTransactions)
-			common.changePage(PageTransactionDetails)
+			common.changePage(TransactionDetailsPage(*common, txn))
 		}
 	}
 }
 
-func initTxnWidgets(common pageCommon, transaction wallet.Transaction) transactionWdg {
+func txConfirmations(common *pageCommon, transaction *dcrlibwallet.Transaction) int32 {
+	if transaction.BlockHeight != -1 {
+		// TODO
+		return (common.multiWallet.WalletWithID(transaction.WalletID).GetBestBlock() - transaction.BlockHeight) + 1
+	}
+
+	return 0
+}
+
+func initTxnWidgets(common *pageCommon, transaction *dcrlibwallet.Transaction) transactionWdg {
+
 	var txn transactionWdg
-	t := time.Unix(transaction.Txn.Timestamp, 0).UTC()
+	t := time.Unix(transaction.Timestamp, 0).UTC()
 	txn.time = common.theme.Body1(t.Format(time.UnixDate))
 	txn.status = common.theme.Body1("")
-	txn.wallet = common.theme.Body2(transaction.WalletName)
+	txn.wallet = common.theme.Body2(common.multiWallet.WalletWithID(transaction.WalletID).Name)
 
-	if transaction.Status == "confirmed" {
-		txn.status.Text = formatDateOrTime(transaction.Txn.Timestamp)
+	if txConfirmations(common, transaction) > 1 {
+		txn.status.Text = formatDateOrTime(transaction.Timestamp)
 		txn.statusIcon = common.icons.confirmIcon
 	} else {
-		txn.status.Text = transaction.Status
+		txn.status.Text = "pending"
 		txn.status.Color = common.theme.Color.Gray
 		txn.statusIcon = common.icons.pendingIcon
 	}
 
-	if transaction.Txn.Direction == dcrlibwallet.TxDirectionSent {
+	if transaction.Direction == dcrlibwallet.TxDirectionSent {
 		txn.direction = common.icons.sendIcon
 	} else {
 		txn.direction = common.icons.receiveIcon

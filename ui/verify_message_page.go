@@ -4,11 +4,10 @@ import (
 	"image/color"
 	"strings"
 
-	"github.com/planetdecred/godcr/ui/values"
-
 	"gioui.org/layout"
 	"gioui.org/widget"
 	"github.com/planetdecred/godcr/ui/decredmaterial"
+	"github.com/planetdecred/godcr/ui/values"
 )
 
 const PageVerifyMessage = "VerifyMessage"
@@ -20,10 +19,13 @@ type verifyMessagePage struct {
 	clearBtn, verifyBtn                   decredmaterial.Button
 	verifyMessage                         decredmaterial.Label
 
+	backButton decredmaterial.IconButton
+	infoButton decredmaterial.IconButton
+
 	verifyMessageStatus *widget.Icon
 }
 
-func (win *Window) VerifyMessagePage(c pageCommon) Page {
+func VerifyMessagePage(c pageCommon) Page {
 	pg := &verifyMessagePage{
 		theme:         c.theme,
 		common:        c,
@@ -40,25 +42,28 @@ func (win *Window) VerifyMessagePage(c pageCommon) Page {
 	pg.verifyBtn.TextSize, pg.clearBtn.TextSize, pg.clearBtn.TextSize = values.TextSize14, values.TextSize14, values.TextSize14
 	pg.clearBtn.Background = color.NRGBA{0, 0, 0, 0}
 
+	pg.backButton, pg.infoButton = c.SubPageHeaderButtons()
+
 	return pg
+}
+
+func (pg *verifyMessagePage) pageID() string {
+	return PageVerifyMessage
 }
 
 func (pg *verifyMessagePage) Layout(gtx layout.Context) layout.Dimensions {
 	c := pg.common
 
-	var walletName = c.info.Wallets[*c.selectedWallet].Name
-	if *c.returnPage == PageSecurityTools {
-		walletName = ""
-	}
 	body := func(gtx C) D {
 		load := SubPage{
 			title:      "Verify message",
-			walletName: walletName,
+			walletName: "",
 			back: func() {
 				pg.clearInputs(&c)
-				c.changePage(PageWallet)
-				c.changePage(*c.returnPage)
+				c.popPage() //TODO
 			},
+			backButton: pg.backButton,
+			infoButton: pg.infoButton,
 			body: func(gtx layout.Context) layout.Dimensions {
 				return pg.theme.Card().Layout(gtx, func(gtx C) D {
 					return layout.UniformInset(values.MarginPadding15).Layout(gtx, func(gtx C) D {
@@ -77,9 +82,8 @@ func (pg *verifyMessagePage) Layout(gtx layout.Context) layout.Dimensions {
 		}
 		return c.SubPageLayout(gtx, load)
 	}
-	return c.Layout(gtx, func(gtx C) D {
-		return c.UniformPadding(gtx, body)
-	})
+
+	return pg.common.UniformPadding(gtx, body)
 }
 
 func (pg *verifyMessagePage) inputRow(editor decredmaterial.Editor) layout.Widget {
@@ -144,7 +148,7 @@ func (pg *verifyMessagePage) handle() {
 		if pg.verifyBtn.Button.Clicked() || handleSubmitEvent(pg.addressInput.Editor, pg.messageInput.Editor, pg.signInput.Editor) {
 			pg.verifyMessage.Text = ""
 			pg.verifyMessageStatus = nil
-			valid, err := c.wallet.VerifyMessage(pg.addressInput.Editor.Text(), pg.messageInput.Editor.Text(), pg.signInput.Editor.Text())
+			valid, err := c.multiWallet.VerifyMessage(pg.addressInput.Editor.Text(), pg.messageInput.Editor.Text(), pg.signInput.Editor.Text())
 			if err != nil {
 				pg.signInput.SetError("Invalid signature")
 				return
@@ -193,7 +197,7 @@ func (pg *verifyMessagePage) clearInputs(c *pageCommon) {
 }
 
 func (pg *verifyMessagePage) validateAddress(c pageCommon) bool {
-	if isValid, _ := c.wallet.IsAddressValid(pg.addressInput.Editor.Text()); !isValid {
+	if c.multiWallet.IsAddressValid(pg.addressInput.Editor.Text()) {
 		pg.addressInput.SetError("Invalid address")
 		return false
 	}

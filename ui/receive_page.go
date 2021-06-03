@@ -13,10 +13,9 @@ import (
 	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget"
-
+	"github.com/planetdecred/dcrlibwallet"
 	"github.com/planetdecred/godcr/ui/decredmaterial"
 	"github.com/planetdecred/godcr/ui/values"
-	"github.com/planetdecred/godcr/wallet"
 	qrcode "github.com/yeqown/go-qrcode"
 	"golang.org/x/exp/shiny/materialdesign/icons"
 )
@@ -28,17 +27,21 @@ type receivePage struct {
 	pageContainer     layout.List
 	theme             *decredmaterial.Theme
 	isNewAddr, isInfo bool
-	addrs             string
 	newAddr, copy     decredmaterial.Button
 	info, more        decredmaterial.IconButton
 	card              decredmaterial.Card
 	receiveAddress    decredmaterial.Label
+	selector          *accountSelector
 	gtx               *layout.Context
 
-	backdrop *widget.Clickable
+	backdrop   *widget.Clickable
+	backButton decredmaterial.IconButton
+	infoButton decredmaterial.IconButton
+
+	currentAddress string
 }
 
-func (win *Window) ReceivePage(common pageCommon) Page {
+func ReceivePage(common pageCommon) Page {
 	page := &receivePage{
 		pageContainer: layout.List{
 			Axis: layout.Vertical,
@@ -52,6 +55,8 @@ func (win *Window) ReceivePage(common pageCommon) Page {
 		receiveAddress: common.theme.Label(values.TextSize20, ""),
 		card:           common.theme.Card(),
 		backdrop:       new(widget.Clickable),
+		backButton:     common.theme.PlainIconButton(new(widget.Clickable), common.icons.navigationArrowBack),
+		infoButton:     common.theme.PlainIconButton(new(widget.Clickable), common.icons.actionInfo),
 	}
 
 	page.info.Inset, page.info.Size = layout.UniformInset(values.MarginPadding5), values.MarginPadding20
@@ -75,7 +80,42 @@ func (win *Window) ReceivePage(common pageCommon) Page {
 	page.newAddr.Background = common.theme.Color.Surface
 	page.newAddr.TextSize = values.TextSize16
 
+	zeroInset := layout.UniformInset(values.MarginPadding0)
+	page.backButton.Color, page.infoButton.Color = common.theme.Color.Gray3, common.theme.Color.Gray3
+
+	m25 := values.MarginPadding25
+	page.backButton.Size, page.infoButton.Size = m25, m25
+	page.backButton.Inset, page.infoButton.Inset = zeroInset, zeroInset
+
+	page.selector = newAccountSelector(common).
+		title("Receiving account").
+		accountSelected(func(selectedAccount *dcrlibwallet.Account) {
+			selectedWallet := page.common.multiWallet.WalletWithID(selectedAccount.WalletID)
+			currentAddress, err := selectedWallet.CurrentAddress(selectedAccount.Number)
+			if err != nil {
+				log.Errorf("Error getting current address: %v", err)
+			} else {
+				page.currentAddress = currentAddress
+			}
+		}).
+		accountValidator(func(account *dcrlibwallet.Account) bool {
+
+			// Filter out imported account and mixed.
+
+			wal := page.common.multiWallet.WalletWithID(account.WalletID)
+			mixedAccountNumber := wal.ReadInt32ConfigValueForKey(dcrlibwallet.AccountMixerMixedAccount, -1)
+			if account.Number == MaxInt32 ||
+				account.Number == mixedAccountNumber {
+				return false
+			}
+			return true
+		})
+
 	return page
+}
+
+func (pg *receivePage) pageID() string {
+	return PageReceive
 }
 
 func (pg *receivePage) Layout(gtx layout.Context) layout.Dimensions {
@@ -88,7 +128,7 @@ func (pg *receivePage) Layout(gtx layout.Context) layout.Dimensions {
 	pageContent := []func(gtx C) D{
 		func(gtx C) D {
 			return pg.pageSections(gtx, func(gtx C) D {
-				return common.accountSelectorLayout(gtx, "receive", "")
+				return pg.selector.Layout(gtx)
 			})
 		},
 		func(gtx C) D {
@@ -107,13 +147,10 @@ func (pg *receivePage) Layout(gtx layout.Context) layout.Dimensions {
 								Alignment: layout.Middle,
 							}.Layout(gtx,
 								layout.Rigid(func(gtx C) D {
-									if pg.addrs != "" {
-										return pg.addressLayout(gtx, common)
-									}
-									return layout.Dimensions{}
+									return pg.addressLayout(gtx, common)
 								}),
 								layout.Rigid(func(gtx C) D {
-									return pg.addressQRCodeLayout(gtx, common)
+									return pg.addressQRCodeLayout(gtx)
 								}),
 							)
 						})
@@ -123,26 +160,22 @@ func (pg *receivePage) Layout(gtx layout.Context) layout.Dimensions {
 		},
 	}
 
-	dims := common.Layout(gtx, func(gtx C) D {
-		return common.UniformPadding(gtx, func(gtx C) D {
-			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-				layout.Rigid(func(gtx C) D {
-					return layout.Inset{Bottom: values.MarginPadding16}.Layout(gtx, func(gtx C) D {
-						return pg.topNav(gtx, common)
+	return common.UniformPadding(gtx, func(gtx C) D {
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx C) D {
+				return layout.Inset{Bottom: values.MarginPadding16}.Layout(gtx, func(gtx C) D {
+					return pg.topNav(gtx, common)
+				})
+			}),
+			layout.Rigid(func(gtx C) D {
+				return common.theme.Card().Layout(gtx, func(gtx C) D {
+					return pg.pageContainer.Layout(gtx, len(pageContent), func(gtx C, i int) D {
+						return pageContent[i](gtx)
 					})
-				}),
-				layout.Rigid(func(gtx C) D {
-					return common.theme.Card().Layout(gtx, func(gtx C) D {
-						return pg.pageContainer.Layout(gtx, len(pageContent), func(gtx C, i int) D {
-							return pageContent[i](gtx)
-						})
-					})
-				}),
-			)
-		})
+				})
+			}),
+		)
 	})
-
-	return dims
 }
 
 func (pg *receivePage) pageSections(gtx layout.Context, body layout.Widget) layout.Dimensions {
@@ -170,8 +203,8 @@ func (pg *receivePage) topNav(gtx layout.Context, common pageCommon) layout.Dime
 		layout.Rigid(func(gtx C) D {
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 				layout.Rigid(func(gtx C) D {
-					common.subPageBackButton.Icon = common.icons.contentClear
-					return common.subPageBackButton.Layout(gtx)
+					pg.backButton.Icon = common.icons.contentClear
+					return pg.backButton.Layout(gtx)
 				}),
 				layout.Rigid(func(gtx C) D {
 					return layout.Inset{Left: m}.Layout(gtx, pg.theme.H6("Receive DCR").Layout)
@@ -179,7 +212,7 @@ func (pg *receivePage) topNav(gtx layout.Context, common pageCommon) layout.Dime
 			)
 		}),
 		layout.Flexed(1, func(gtx C) D {
-			return layout.E.Layout(gtx, common.subPageInfoButton.Layout)
+			return layout.E.Layout(gtx, pg.info.Layout)
 		}),
 	)
 }
@@ -220,7 +253,7 @@ func (pg *receivePage) addressLayout(gtx layout.Context, c pageCommon) layout.Di
 
 	return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 		layout.Flexed(1, func(gtx C) D {
-			pg.receiveAddress.Text = pg.addrs
+			pg.receiveAddress.Text = pg.currentAddress
 			pg.receiveAddress.Color = pg.theme.Color.DeepBlue
 			pg.receiveAddress.Alignment = text.Middle
 			pg.receiveAddress.MaxLines = 1
@@ -240,15 +273,14 @@ func (pg *receivePage) addressLayout(gtx layout.Context, c pageCommon) layout.Di
 	)
 }
 
-func (pg *receivePage) addressQRCodeLayout(gtx layout.Context, common pageCommon) layout.Dimensions {
-	pg.addrs = common.info.Wallets[common.wallAcctSelector.selectedReceiveWallet].Accounts[common.wallAcctSelector.selectedReceiveAccount].CurrentAddress
+func (pg *receivePage) addressQRCodeLayout(gtx layout.Context) layout.Dimensions {
 	absoluteWdPath, err := GetAbsolutePath()
 	if err != nil {
 		log.Error(err.Error())
 	}
 
 	opt := qrcode.WithLogoImageFilePNG(filepath.Join(absoluteWdPath, "ui/assets/decredicons/qrcodeSymbol.png"))
-	qrCode, err := qrcode.New(pg.addrs, opt)
+	qrCode, err := qrcode.New(pg.currentAddress, opt)
 	if err != nil {
 		log.Error("Error generating address qrCode: " + err.Error())
 		return layout.Dimensions{}
@@ -270,6 +302,9 @@ func (pg *receivePage) addressQRCodeLayout(gtx layout.Context, common pageCommon
 }
 
 func (pg *receivePage) handle() {
+
+	pg.selector.handle()
+
 	common := pg.common
 	gtx := pg.gtx
 	if pg.backdrop.Clicked() {
@@ -284,28 +319,17 @@ func (pg *receivePage) handle() {
 	}
 
 	if pg.newAddr.Button.Clicked() {
-		wall := common.info.Wallets[common.wallAcctSelector.selectedReceiveWallet]
-
-		var generateNewAddress func(wall wallet.InfoShort)
-		generateNewAddress = func(wall wallet.InfoShort) {
-			oldAddr := wall.Accounts[common.wallAcctSelector.selectedReceiveAccount].CurrentAddress
-			newAddr, err := common.wallet.NextAddress(wall.ID, wall.Accounts[common.wallAcctSelector.selectedReceiveAccount].Number)
-			if err != nil {
-				log.Debug("Error generating new address" + err.Error())
-				return
-			}
-			if newAddr == oldAddr {
-				log.Info("Call again to generate new address")
-				generateNewAddress(wall)
-				return
-			}
-			common.info.Wallets[common.wallAcctSelector.selectedReceiveWallet].Accounts[common.wallAcctSelector.selectedReceiveAccount].CurrentAddress = newAddr
-			pg.isNewAddr = false
+		newAddr, err := pg.generateNewAddress()
+		if err != nil {
+			log.Debug("Error generating new address" + err.Error())
+			return
 		}
-		generateNewAddress(wall)
+
+		pg.currentAddress = newAddr
+		pg.isNewAddr = false
 	}
 
-	if common.subPageInfoButton.Button.Clicked() {
+	if pg.infoButton.Button.Clicked() {
 		go func() {
 			common.modalReceiver <- &modalLoad{
 				template:   ReceiveInfoTemplate,
@@ -316,14 +340,13 @@ func (pg *receivePage) handle() {
 		}()
 	}
 
-	if common.subPageBackButton.Button.Clicked() {
-		common.changePage(*common.returnPage)
+	if pg.backButton.Button.Clicked() {
+		common.popPage()
 	}
 
 	if pg.copy.Button.Clicked() {
 
-		selectedAccount := common.info.Wallets[common.wallAcctSelector.selectedReceiveWallet].Accounts[common.wallAcctSelector.selectedReceiveAccount]
-		clipboard.WriteOp{Text: selectedAccount.CurrentAddress}.Add(gtx.Ops)
+		clipboard.WriteOp{Text: pg.currentAddress}.Add(gtx.Ops)
 
 		pg.copy.Text = "Copied!"
 		pg.copy.Color = common.theme.Color.Success
@@ -333,6 +356,22 @@ func (pg *receivePage) handle() {
 		})
 		return
 	}
+}
+
+func (pg *receivePage) generateNewAddress() (string, error) {
+	selectedWallet := pg.common.multiWallet.WalletWithID(pg.selector.selectedAccount.WalletID)
+
+generateAddress:
+	newAddr, err := selectedWallet.NextAddress(pg.selector.selectedAccount.Number)
+	if err != nil {
+		return "", err
+	}
+
+	if newAddr == pg.currentAddress {
+		goto generateAddress
+	}
+
+	return newAddr, nil
 }
 
 func (pg *receivePage) onClose() {}

@@ -16,16 +16,25 @@ type helpPage struct {
 	theme         *decredmaterial.Theme
 	documentation *widget.Clickable
 	common        pageCommon
+
+	backButton decredmaterial.IconButton
+	infoButton decredmaterial.IconButton
 }
 
-func (win *Window) HelpPage(common pageCommon) Page {
+func HelpPage(common pageCommon) Page {
 	pg := &helpPage{
 		theme:         common.theme,
 		documentation: new(widget.Clickable),
 		common:        common,
 	}
 
+	pg.backButton, pg.infoButton = common.SubPageHeaderButtons()
+
 	return pg
+}
+
+func (pg *helpPage) pageID() string {
+	return PageHelp
 }
 
 // main settings layout
@@ -35,8 +44,10 @@ func (pg *helpPage) Layout(gtx layout.Context) layout.Dimensions {
 			title:    "Help",
 			subTitle: "For more information, please visit the Decred documentation.",
 			back: func() {
-				pg.common.changePage(PageMore)
+				pg.common.popPage()
 			},
+			backButton: pg.backButton,
+			infoButton: pg.infoButton,
 			body: func(gtx C) D {
 				return layout.Inset{Top: values.MarginPadding5}.Layout(gtx, func(gtx C) D {
 					return layout.Flex{Spacing: layout.SpaceBetween, WeightSum: 2}.Layout(gtx,
@@ -47,9 +58,7 @@ func (pg *helpPage) Layout(gtx layout.Context) layout.Dimensions {
 		}
 		return pg.common.SubPageLayout(gtx, page)
 	}
-	return pg.common.Layout(gtx, func(gtx C) D {
-		return pg.common.UniformPadding(gtx, body)
-	})
+	return pg.common.UniformPadding(gtx, body)
 }
 
 func (pg *helpPage) document(common pageCommon) layout.Widget {

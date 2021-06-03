@@ -33,11 +33,10 @@ type proposalDetails struct {
 	descriptionCard     decredmaterial.Card
 	proposalItems       map[string]proposalItemWidgets
 	descriptionList     *layout.List
-	selectedProposal    **dcrlibwallet.Proposal
+	selectedProposal    *dcrlibwallet.Proposal
 	redirectIcon        *widget.Image
 	commentsBundleBtn   *widget.Clickable
 	proposalBundleBtn   *widget.Clickable
-	viewInGithubBtn     *widget.Clickable
 	viewInPoliteiaBtn   *widget.Clickable
 	viewInPoliteiaLabel decredmaterial.Label
 	voteBar             decredmaterial.VoteBar
@@ -45,35 +44,39 @@ type proposalDetails struct {
 	downloadIcon        *widget.Image
 	timerIcon           *widget.Image
 	successIcon         *widget.Icon
-	refreshWindow       func()
+	backButton          decredmaterial.IconButton
+	infoButton          decredmaterial.IconButton
 }
 
-func (win *Window) ProposalDetailsPage(common pageCommon) Page {
+func ProposalDetailsPage(common pageCommon, selectedProposal *dcrlibwallet.Proposal) Page {
 	pg := &proposalDetails{
 		theme:               common.theme,
 		loadingDescription:  false,
 		common:              common,
 		descriptionCard:     common.theme.Card(),
 		descriptionList:     &layout.List{Axis: layout.Vertical},
-		selectedProposal:    &win.selectedProposal,
 		commentsBundleBtn:   new(widget.Clickable),
 		proposalBundleBtn:   new(widget.Clickable),
-		viewInGithubBtn:     new(widget.Clickable),
 		viewInPoliteiaBtn:   new(widget.Clickable),
 		redirectIcon:        common.icons.redirectIcon,
 		downloadIcon:        common.icons.downloadIcon,
 		viewInPoliteiaLabel: common.theme.Body2("View on Politeia"),
 		voteBar:             common.theme.VoteBar(common.icons.actionInfo, common.icons.imageBrightness1),
 		proposalItems:       make(map[string]proposalItemWidgets),
+		selectedProposal:    selectedProposal,
 		rejectedIcon:        common.icons.navigationCancel,
 		successIcon:         common.icons.actionCheckCircle,
-		refreshWindow:       common.refreshWindow,
 		timerIcon:           common.icons.timerIcon,
 	}
 
 	pg.downloadIcon.Scale = 1
+	pg.backButton, pg.infoButton = common.SubPageHeaderButtons()
 
 	return pg
+}
+
+func (pg *proposalDetails) pageID() string {
+	return PageProposalDetails
 }
 
 func (pg *proposalDetails) handle() {
@@ -87,12 +90,7 @@ func (pg *proposalDetails) handle() {
 
 	for pg.viewInPoliteiaBtn.Clicked() {
 		proposal := *pg.selectedProposal
-		goToURL("https://proposals.decred.org/proposals/" + proposal.Token)
-	}
-
-	for pg.viewInGithubBtn.Clicked() {
-		proposal := *pg.selectedProposal
-		goToURL("https://github.com/decred-proposals/mainnet/tree/master/" + proposal.Token)
+		goToURL("https://proposals.decred.org/record/" + proposal.Token)
 	}
 }
 
@@ -236,14 +234,13 @@ func (pg *proposalDetails) layoutNormalTitle(gtx C, proposal *dcrlibwallet.Propo
 }
 
 func (pg *proposalDetails) layoutTitle(gtx C) D {
-	proposal := *pg.selectedProposal
 
 	return pg.descriptionCard.Layout(gtx, func(gtx C) D {
 		return layout.UniformInset(values.MarginPadding15).Layout(gtx, func(gtx C) D {
-			if proposal.Category == dcrlibwallet.ProposalCategoryPre {
-				return pg.layoutInDiscussionState(gtx, proposal)
+			if pg.selectedProposal.Category == dcrlibwallet.ProposalCategoryPre {
+				return pg.layoutInDiscussionState(gtx, pg.selectedProposal)
 			}
-			return pg.layoutNormalTitle(gtx, proposal)
+			return pg.layoutNormalTitle(gtx, pg.selectedProposal)
 		})
 	})
 }
@@ -311,7 +308,6 @@ func (pg *proposalDetails) layoutDescription(gtx C) D {
 	}
 
 	w = append(w, pg.layoutRedirect("View on Politeia", pg.redirectIcon, pg.viewInPoliteiaBtn))
-	w = append(w, pg.layoutRedirect("View on GitHub", pg.redirectIcon, pg.viewInGithubBtn))
 	w = append(w, pg.layoutRedirect("Download Proposal Bundle", pg.downloadIcon, pg.proposalBundleBtn))
 	w = append(w, pg.layoutRedirect("Download Comments Bundle", pg.downloadIcon, pg.commentsBundleBtn))
 
@@ -363,7 +359,7 @@ func (pg *proposalDetails) layoutParsingState(gtx C) D {
 func (pg *proposalDetails) Layout(gtx C) D {
 	common := pg.common
 
-	proposal := *pg.selectedProposal
+	proposal := pg.selectedProposal
 	_, ok := pg.proposalItems[proposal.Token]
 	if !ok && !pg.loadingDescription {
 		pg.loadingDescription = true
@@ -373,7 +369,7 @@ func (pg *proposalDetails) Layout(gtx C) D {
 				proposalDescription = proposal.IndexFile
 			} else {
 				var err error
-				proposalDescription, err = common.wallet.FetchProposalDescription(proposal.Token)
+				proposalDescription, err = common.multiWallet.Politeia.FetchProposalDescription(proposal.Token)
 				if err != nil {
 					log.Infof("Error loading proposal description: %v", err)
 					time.Sleep(7 * time.Second)
@@ -389,7 +385,6 @@ func (pg *proposalDetails) Layout(gtx C) D {
 				clickables: proposalClickables,
 			}
 			pg.loadingDescription = false
-			pg.refreshWindow()
 		}()
 	}
 
@@ -397,9 +392,11 @@ func (pg *proposalDetails) Layout(gtx C) D {
 		page := SubPage{
 			title: truncateString(proposal.Name, 40),
 			back: func() {
-				common.changePage(PageProposals)
+				common.popPage()
 				pg.descriptionList.Position.First, pg.descriptionList.Position.Offset = 0, 0
 			},
+			backButton: pg.backButton,
+			infoButton: pg.infoButton,
 			body: func(gtx C) D {
 				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 					layout.Rigid(func(gtx C) D {
@@ -419,9 +416,8 @@ func (pg *proposalDetails) Layout(gtx C) D {
 		}
 		return common.SubPageLayout(gtx, page)
 	}
-	return common.Layout(gtx, func(gtx C) D {
-		return common.UniformPadding(gtx, body)
-	})
+
+	return pg.common.UniformPadding(gtx, body)
 
 }
 

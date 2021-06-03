@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/planetdecred/dcrlibwallet"
 	"github.com/planetdecred/godcr/wallet"
 
 	"gioui.org/layout"
@@ -18,23 +19,27 @@ const PageTicketsList = "TicketsList"
 
 type ticketPageList struct {
 	th           *decredmaterial.Theme
-	tickets      **wallet.Tickets
+	tickets      *wallet.Tickets
 	ticketsList  layout.List
 	filterSorter int
+	wallets      []*dcrlibwallet.Wallet
 
 	toggleViewType     *widget.Clickable
 	orderDropDown      *decredmaterial.DropDown
 	ticketTypeDropDown *decredmaterial.DropDown
 	walletDropDown     *decredmaterial.DropDown
+	backButton         decredmaterial.IconButton
+	infoButton         decredmaterial.IconButton
 	isGridView         bool
 	common             pageCommon
 }
 
-func (win *Window) TicketPageList(c pageCommon) Page {
+func TicketPageList(c pageCommon, tickets *wallet.Tickets) Page {
 	pg := &ticketPageList{
 		th:             c.theme,
 		common:         c,
-		tickets:        &win.walletTickets,
+		tickets:        tickets,
+		wallets:        c.multiWallet.AllWallets(),
 		ticketsList:    layout.List{Axis: layout.Vertical},
 		toggleViewType: new(widget.Clickable),
 		isGridView:     true,
@@ -51,7 +56,15 @@ func (win *Window) TicketPageList(c pageCommon) Page {
 		{Text: "Revoked"},
 	}, 1)
 
+	pg.initWalletDropDown()
+
+	pg.backButton, pg.infoButton = c.SubPageHeaderButtons()
+
 	return pg
+}
+
+func (pg *ticketPageList) pageID() string {
+	return PageTicketsList
 }
 
 func (pg *ticketPageList) Layout(gtx layout.Context) layout.Dimensions {
@@ -60,11 +73,13 @@ func (pg *ticketPageList) Layout(gtx layout.Context) layout.Dimensions {
 		page := SubPage{
 			title: "All tickets",
 			back: func() {
-				c.changePage(PageTickets)
+				c.popPage()
 			},
+			backButton: pg.backButton,
+			infoButton: pg.infoButton,
 			body: func(gtx C) D {
-				walletID := c.info.Wallets[pg.walletDropDown.SelectedIndex()].ID
-				tickets := (*pg.tickets).Confirmed[walletID]
+				walletID := pg.wallets[pg.walletDropDown.SelectedIndex()].ID
+				tickets := pg.tickets.Confirmed[walletID]
 				return layout.Stack{Alignment: layout.N}.Layout(gtx,
 					layout.Expanded(func(gtx C) D {
 						return layout.Inset{Top: values.MarginPadding60}.Layout(gtx, func(gtx C) D {
@@ -141,9 +156,7 @@ func (pg *ticketPageList) Layout(gtx layout.Context) layout.Dimensions {
 		return c.SubPageLayout(gtx, page)
 	}
 
-	return c.Layout(gtx, func(gtx C) D {
-		return c.UniformPadding(gtx, body)
-	})
+	return c.UniformPadding(gtx, body)
 }
 
 func (pg *ticketPageList) dropDowns(gtx layout.Context) layout.Dimensions {
@@ -284,25 +297,20 @@ func (pg *ticketPageList) ticketListGridLayout(gtx layout.Context, c pageCommon,
 	})
 }
 
-func (pg *ticketPageList) initWalletDropDown(common pageCommon) {
-	if len(common.info.Wallets) == 0 || pg.walletDropDown != nil {
-		return
-	}
+func (pg *ticketPageList) initWalletDropDown() {
 
 	var walletDropDownItems []decredmaterial.DropDownItem
-	for i := range common.info.Wallets {
+	for _, wal := range pg.wallets {
 		item := decredmaterial.DropDownItem{
-			Text: common.info.Wallets[i].Name,
-			Icon: common.icons.walletIcon,
+			Text: wal.Name,
+			Icon: pg.common.icons.walletIcon,
 		}
 		walletDropDownItems = append(walletDropDownItems, item)
 	}
-	pg.walletDropDown = common.theme.DropDown(walletDropDownItems, 2)
+	pg.walletDropDown = pg.common.theme.DropDown(walletDropDownItems, 2)
 }
 
 func (pg *ticketPageList) handle() {
-	c := pg.common
-	pg.initWalletDropDown(c)
 
 	if pg.toggleViewType.Clicked() {
 		pg.isGridView = !pg.isGridView
@@ -312,8 +320,8 @@ func (pg *ticketPageList) handle() {
 	if pg.filterSorter != sortSelection {
 		pg.filterSorter = sortSelection
 		newestFirst := pg.filterSorter == 0
-		for _, wal := range c.info.Wallets {
-			tickets := (*pg.tickets).Confirmed[wal.ID]
+		for _, wal := range pg.wallets {
+			tickets := pg.tickets.Confirmed[wal.ID]
 			sort.SliceStable(tickets, func(i, j int) bool {
 				backTime := time.Unix(tickets[j].Info.Ticket.Timestamp, 0)
 				frontTime := time.Unix(tickets[i].Info.Ticket.Timestamp, 0)

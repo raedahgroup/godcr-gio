@@ -10,30 +10,29 @@ import (
 	"github.com/planetdecred/dcrlibwallet"
 	"github.com/planetdecred/godcr/ui/decredmaterial"
 	"github.com/planetdecred/godcr/ui/values"
-	"github.com/planetdecred/godcr/wallet"
 )
 
 const PageSignMessage = "SignMessage"
 
 type signMessagePage struct {
-	common        pageCommon
-	theme         *decredmaterial.Theme
-	container     layout.List
-	wallet        *wallet.Wallet
-	walletID      int
-	errorReceiver chan error
+	common    pageCommon
+	theme     *decredmaterial.Theme
+	container layout.List
+	wallet    *dcrlibwallet.Wallet
 
 	isSigningMessage                           bool
 	titleLabel, errorLabel, signedMessageLabel decredmaterial.Label
 	addressEditor, messageEditor               decredmaterial.Editor
 	clearButton, signButton, copyButton        decredmaterial.Button
-	result                                     **wallet.Signature
 	copySignature                              *widget.Clickable
 	copyIcon                                   *widget.Image
 	gtx                                        *layout.Context
+
+	backButton decredmaterial.IconButton
+	infoButton decredmaterial.IconButton
 }
 
-func (win *Window) SignMessagePage(common pageCommon) Page {
+func SignMessagePage(common pageCommon, walletID int) Page {
 	addressEditor := common.theme.Editor(new(widget.Editor), "Address")
 	addressEditor.Editor.SingleLine, addressEditor.Editor.Submit = true, true
 	messageEditor := common.theme.Editor(new(widget.Editor), "Message")
@@ -51,7 +50,7 @@ func (win *Window) SignMessagePage(common pageCommon) Page {
 		},
 		common: common,
 		theme:  common.theme,
-		wallet: common.wallet,
+		wallet: common.multiWallet.WalletWithID(walletID),
 
 		titleLabel:         common.theme.H5("Sign Message"),
 		signedMessageLabel: common.theme.Body1(""),
@@ -59,18 +58,22 @@ func (win *Window) SignMessagePage(common pageCommon) Page {
 		addressEditor:      addressEditor,
 		messageEditor:      messageEditor,
 
-		clearButton:   clearButton,
-		signButton:    common.theme.Button(new(widget.Clickable), "Sign message"),
-		copyButton:    common.theme.Button(new(widget.Clickable), "Copy"),
-		result:        &win.signatureResult,
+		clearButton: clearButton,
+		signButton:  common.theme.Button(new(widget.Clickable), "Sign message"),
+		copyButton:  common.theme.Button(new(widget.Clickable), "Copy"),
+		// result:        &win.signatureResult,
 		copySignature: new(widget.Clickable),
 		copyIcon:      copyIcon,
-		errorReceiver: make(chan error),
 	}
 
 	pg.signedMessageLabel.Color = common.theme.Color.Gray
+	pg.backButton, pg.infoButton = common.SubPageHeaderButtons()
 
 	return pg
+}
+
+func (pg *signMessagePage) pageID() string {
+	return PageSignMessage
 }
 
 func (pg *signMessagePage) Layout(gtx layout.Context) layout.Dimensions {
@@ -78,16 +81,17 @@ func (pg *signMessagePage) Layout(gtx layout.Context) layout.Dimensions {
 		pg.gtx = &gtx
 	}
 	common := pg.common
-	pg.walletID = common.info.Wallets[*common.selectedWallet].ID
 
 	body := func(gtx C) D {
 		page := SubPage{
 			title:      "Sign message",
-			walletName: common.info.Wallets[*common.selectedWallet].Name,
+			walletName: pg.wallet.Name,
 			back: func() {
 				pg.clearForm()
-				common.changePage(PageWallet)
+				common.changePage(WalletPage(common)) // TODO
 			},
+			backButton: pg.backButton,
+			infoButton: pg.infoButton,
 			body: func(gtx layout.Context) layout.Dimensions {
 				return common.theme.Card().Layout(gtx, func(gtx C) D {
 					return layout.UniformInset(values.MarginPadding15).Layout(gtx, func(gtx C) D {
@@ -106,9 +110,7 @@ func (pg *signMessagePage) Layout(gtx layout.Context) layout.Dimensions {
 		return common.SubPageLayout(gtx, page)
 	}
 
-	return common.Layout(gtx, func(gtx C) D {
-		return common.UniformPadding(gtx, body)
-	})
+	return common.UniformPadding(gtx, body)
 }
 
 func (pg *signMessagePage) description() layout.Widget {
@@ -221,7 +223,19 @@ func (pg *signMessagePage) handle() {
 					template: PasswordTemplate,
 					title:    "Confirm to sign",
 					confirm: func(pass string) {
-						pg.wallet.SignMessage(pg.walletID, []byte(pass), address, message, pg.errorReceiver)
+						go func() {
+							sig, err := pg.wallet.SignMessage([]byte(pass), address, message)
+							if err != nil {
+								common.modalLoad.setLoading(false)
+								common.notify(err.Error(), false)
+								if err.Error() != dcrlibwallet.ErrInvalidPassphrase {
+									common.closeModal()
+								}
+							} else {
+								common.closeModal()
+								pg.signedMessageLabel.Text = dcrlibwallet.EncodeBase64(sig)
+							}
+						}()
 					},
 					confirmText: "Confirm",
 					cancel:      common.closeModal,
@@ -235,21 +249,6 @@ func (pg *signMessagePage) handle() {
 		clipboard.WriteOp{Text: pg.signedMessageLabel.Text}.Add(gtx.Ops)
 	}
 
-	if *pg.result != nil {
-		pg.signedMessageLabel.Text = (*pg.result).Signature
-		*pg.result = nil
-		pg.isSigningMessage = false
-	}
-
-	select {
-	case err := <-pg.errorReceiver:
-		common.modalLoad.setLoading(false)
-		common.notify(err.Error(), false)
-		if err.Error() != dcrlibwallet.ErrInvalidPassphrase {
-			common.closeModal()
-		}
-	default:
-	}
 }
 
 func (pg *signMessagePage) validate(ignoreEmpty bool) bool {
@@ -271,16 +270,13 @@ func (pg *signMessagePage) validateAddress(ignoreEmpty bool) bool {
 	}
 
 	if address != "" {
-		isValid, _ := pg.wallet.IsAddressValid(address)
+		isValid := pg.common.multiWallet.IsAddressValid(address)
 		if !isValid {
 			pg.addressEditor.SetError("Invalid address")
 			return false
 		}
 
-		exist, err := pg.wallet.HaveAddress(pg.walletID, address)
-		if err != nil {
-			return false
-		}
+		exist := pg.wallet.HaveAddress(address)
 		if !exist {
 			pg.addressEditor.SetError("Address not owned by this wallet")
 			return false

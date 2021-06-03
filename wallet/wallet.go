@@ -40,60 +40,47 @@ func NewWallet(root string, net string, send chan Response, confirms int32) (*Wa
 	return wal, nil
 }
 
+func (wal *Wallet) MultiWallet() *dcrlibwallet.MultiWallet {
+	return wal.multi
+}
+
 // LoadWallets loads the wallets for network in the root directory.
 // It adds a SyncProgressListener to the multiwallet and opens the wallets if no
 // startup passphrase was set.
 // It is non-blocking and sends its result or any erro to wal.Send.
-func (wal *Wallet) LoadWallets() {
-	go func() {
-		resp := Response{
-			Resp: LoadedWallets{},
-		}
-		multiWal, err := dcrlibwallet.NewMultiWallet(wal.root, "bdb", wal.Net)
+func (wal *Wallet) LoadWallets() error {
+	multiWal, err := dcrlibwallet.NewMultiWallet(wal.root, "bdb", wal.Net)
+	if err != nil {
+		log.Error("Wallet not loaded. Is another process using the data directory?")
+		return err
+	}
+	wal.multi = multiWal
+	l := &listener{
+		Send: wal.Sync,
+	}
+	err = wal.multi.AddSyncProgressListener(l, syncID)
+	if err != nil {
+		return err
+	}
+
+	err = wal.multi.AddTxAndBlockNotificationListener(l, syncID)
+	if err != nil {
+		return err
+	}
+
+	wal.multi.SetAccountMixerNotification(l)
+
+	wal.multi.Politeia.AddNotificationListener(l, syncID)
+
+	startupPassSet := wal.multi.IsStartupSecuritySet()
+	if !startupPassSet {
+		err = wal.multi.OpenWallets(nil)
 		if err != nil {
-			resp.Err = err
-			log.Error("Wallet not loaded. Is another process using the data directory?")
-			wal.Send <- resp
-			return
+			return err
 		}
-		wal.multi = multiWal
-		l := &listener{
-			Send: wal.Sync,
-		}
-		err = wal.multi.AddSyncProgressListener(l, syncID)
-		if err != nil {
-			resp.Err = err
-			wal.Send <- resp
-			return
-		}
+	}
 
-		err = wal.multi.AddTxAndBlockNotificationListener(l, syncID)
-		if err != nil {
-			resp.Err = err
-			wal.Send <- resp
-			return
-		}
-
-		wal.multi.SetAccountMixerNotification(l)
-
-		wal.multi.Politeia.AddNotificationListener(l, syncID)
-
-		startupPassSet := wal.multi.IsStartupSecuritySet()
-		if !startupPassSet {
-			err = wal.multi.OpenWallets(nil)
-			if err != nil {
-				resp.Err = err
-				wal.Send <- resp
-				return
-			}
-		}
-
-		resp.Resp = LoadedWallets{
-			Count:              wal.multi.LoadedWalletsCount(),
-			StartUpSecuritySet: startupPassSet,
-		}
-		wal.Send <- resp
-	}()
+	return nil
 }
 
 // wallets returns an up-to-date map of all opened wallets
@@ -127,7 +114,7 @@ func (wal *Wallet) wallets() ([]dcrlibwallet.Wallet, error) {
 	return wallets, nil
 }
 
-func (wal *Wallet) hdPrefix() string {
+func (wal *Wallet) HDPrefix() string {
 	switch wal.Net {
 	case "testnet3": // should use a constant
 		return dcrlibwallet.TestnetHDPath
