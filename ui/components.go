@@ -23,6 +23,7 @@ const (
 	purchasingAccountTitle = "Purchasing account"
 	sendingAccountTitle    = "Sending account"
 	receivingAccountTitle  = "Receiving account"
+	ticketAge              = "Ticket age"
 )
 
 type (
@@ -40,6 +41,7 @@ type (
 		statusTooltip     *decredmaterial.Tooltip
 		walletNameTooltip *decredmaterial.Tooltip
 		dateTooltip       *decredmaterial.Tooltip
+		daysBehindTooltip *decredmaterial.Tooltip
 	}
 )
 
@@ -325,13 +327,13 @@ func ticketCardTooltip(gtx C, rectLayout layout.Dimensions, tooltip *decredmater
 	return tooltip.Layout(gtx, rect, inset, body)
 }
 
-func walletNameTooltip(gtx C, c *pageCommon, t *wallet.Ticket) layout.Dimensions {
-	walletNameLabel := c.theme.Body2("Wallet name")
+func walletNameAndDateTooltip(gtx C, c *pageCommon, title string, body layout.Widget) layout.Dimensions {
+	walletNameLabel := c.theme.Body2(title)
 	walletNameLabel.Color = c.theme.Color.Gray
 
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(walletNameLabel.Layout),
-		layout.Rigid(toolTipContent(layout.Inset{Top: values.MarginPadding8}, c.theme.Body2(t.WalletName).Layout)),
+		layout.Rigid(body),
 	)
 }
 
@@ -447,7 +449,8 @@ func ticketCard(gtx layout.Context, c *pageCommon, t *wallet.Ticket, tooltip int
 										txt.Color = c.theme.Color.Gray
 										txtLayout := txt.Layout(gtx)
 										ticketCardTooltip(gtx, txtLayout, tp.walletNameTooltip, func(gtx C) D {
-											return walletNameTooltip(gtx, c, t)
+											return walletNameAndDateTooltip(gtx, c, "Wallet name",
+												toolTipContent(layout.Inset{Top: values.MarginPadding8}, c.theme.Body2(t.WalletName).Layout))
 										})
 										return txtLayout
 									}),
@@ -462,7 +465,18 @@ func ticketCard(gtx layout.Context, c *pageCommon, t *wallet.Ticket, tooltip int
 									txt.Color = c.theme.Color.Gray2
 									return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 										layout.Rigid(func(gtx C) D {
-											return txt.Layout(gtx)
+											txtLayout := txt.Layout(gtx)
+											ticketCardTooltip(gtx, txtLayout, tp.dateTooltip, func(gtx C) D {
+												dt := strings.Split(t.DateTime, " ")
+												s1 := []string{dt[0], dt[1], dt[2]}
+												date := strings.Join(s1, " ")
+												s2 := []string{dt[3], dt[4]}
+												time := strings.Join(s2, " ")
+												dateTime := fmt.Sprintf("%s at %s", date, time)
+												return walletNameAndDateTooltip(gtx, c, "Purchased",
+													toolTipContent(layout.Inset{Top: values.MarginPadding8}, c.theme.Body2(dateTime).Layout))
+											})
+											return txtLayout
 										}),
 										layout.Rigid(func(gtx C) D {
 											return layout.Inset{
@@ -476,7 +490,29 @@ func ticketCard(gtx layout.Context, c *pageCommon, t *wallet.Ticket, tooltip int
 										}),
 										layout.Rigid(func(gtx C) D {
 											txt.Text = t.DaysBehind
-											return txt.Layout(gtx)
+											txtLayout := txt.Layout(gtx)
+											ticketCardTooltip(gtx, txtLayout, tp.daysBehindTooltip, func(gtx C) D {
+												var dayText string
+												switch t.Info.Status {
+												case "UNMINED":
+													dayText = ticketAge
+												case "IMMATURE":
+													dayText = ticketAge
+												case "LIVE":
+													dayText = ticketAge
+												case "VOTED":
+													dayText = "Days to vote"
+												case "MISSED":
+													dayText = "Days to miss"
+												case "EXPIRED":
+													dayText = "Days to expire"
+												case "REVOKED":
+													dayText = ticketAge
+												}
+												return walletNameAndDateTooltip(gtx, c, dayText,
+													toolTipContent(layout.Inset{Top: values.MarginPadding8}, c.theme.Body2(t.DaysBehind).Layout))
+											})
+											return txtLayout
 										}),
 									)
 								})

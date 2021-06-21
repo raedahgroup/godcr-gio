@@ -293,6 +293,7 @@ func (pg *ticketPage) ticketsLiveSection(gtx layout.Context, c *pageCommon) layo
 						statusTooltip:     c.theme.Tooltip(),
 						walletNameTooltip: c.theme.Tooltip(),
 						dateTooltip:       c.theme.Tooltip(),
+						daysBehindTooltip: c.theme.Tooltip(),
 					})
 				}
 				return pg.ticketsLive.Layout(gtx, len(tickets), func(gtx C, index int) D {

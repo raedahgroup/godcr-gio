@@ -72,7 +72,6 @@ func (pg *ticketPageList) OnResume() {
 func (pg *ticketPageList) Layout(gtx layout.Context) layout.Dimensions {
 	c := pg.common
 	c.createOrUpdateWalletDropDown(&pg.walletDropDown, pg.wallets)
-	pg.initTicketTooltips(*c)
 
 	body := func(gtx C) D {
 		page := SubPage{
@@ -89,6 +88,7 @@ func (pg *ticketPageList) Layout(gtx layout.Context) layout.Dimensions {
 						statusTooltip:     c.theme.Tooltip(),
 						walletNameTooltip: c.theme.Tooltip(),
 						dateTooltip:       c.theme.Tooltip(),
+						daysBehindTooltip: c.theme.Tooltip(),
 					})
 				}
 				return layout.Stack{Alignment: layout.N}.Layout(gtx,
