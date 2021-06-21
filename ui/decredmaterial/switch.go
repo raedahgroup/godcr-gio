@@ -3,16 +3,26 @@
 package decredmaterial
 
 import (
+	"image"
 	"image/color"
 
+	"gioui.org/f32"
+	// "gioui.org/internal/f32color"
+	"gioui.org/io/pointer"
 	"gioui.org/layout"
+	"gioui.org/op"
+	"gioui.org/op/clip"
+	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
-	"gioui.org/widget/material"
+	// "gioui.org/widget/material"
 )
 
 type Switch struct {
-	material.SwitchStyle
+	Enabled    color.NRGBA
+	Disabled   color.NRGBA
+	thumbColor color.NRGBA
+	Switch     *widget.Bool
 }
 
 type SwitchItem struct {
@@ -28,8 +38,12 @@ type SwitchButtonText struct {
 	selected                           int
 }
 
-func (t *Theme) Switch(swtch *widget.Bool) Switch {
-	return Switch{material.Switch(t.Base, swtch)}
+func (t *Theme) Switch(swtch *widget.Bool) *Switch {
+	sw := &Switch{
+		Switch: swtch,
+	}
+	sw.Enabled, sw.Disabled, sw.thumbColor = t.Color.Primary, t.Color.InactiveGray, t.Color.Surface
+	return sw
 }
 
 func (t *Theme) SwitchButtonText(i []SwitchItem) *SwitchButtonText {
@@ -52,6 +66,74 @@ func (t *Theme) SwitchButtonText(i []SwitchItem) *SwitchButtonText {
 		sw.selected = 1
 	}
 	return sw
+}
+
+func (s *Switch) Layout(gtx layout.Context) layout.Dimensions {
+	trackWidth := gtx.Px(unit.Dp(32))
+	trackHeight := gtx.Px(unit.Dp(20))
+	thumbSize := gtx.Px(unit.Dp(18))
+	trackOff := float32(thumbSize-trackHeight) * .5
+
+	// Draw track.
+	stack := op.Save(gtx.Ops)
+	trackCorner := float32(trackHeight) / 2
+	trackRect := f32.Rectangle{Max: f32.Point{
+		X: float32(trackWidth),
+		Y: float32(trackHeight),
+	}}
+	col := s.Disabled
+	if s.Switch.Value {
+		col = s.Enabled
+	}
+
+	trackColor := col
+	op.Offset(f32.Point{Y: trackOff}).Add(gtx.Ops)
+	clip.UniformRRect(trackRect, trackCorner).Add(gtx.Ops)
+	paint.ColorOp{Color: trackColor}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+	stack.Load()
+
+	// Compute thumb offset and color.
+	stack = op.Save(gtx.Ops)
+	if s.Switch.Value {
+		off := trackWidth - thumbSize
+		op.Offset(f32.Point{X: float32(off)}).Add(gtx.Ops)
+	}
+
+	thumbRadius := float32(thumbSize) / 2
+
+	// Draw thumb shadow, a translucent disc slightly larger than the
+	// thumb itself.
+	// Center shadow horizontally and slightly adjust its Y.
+	paint.FillShape(gtx.Ops, col,
+		clip.Circle{
+			Center: f32.Point{X: thumbRadius, Y: thumbRadius + .25},
+			Radius: thumbRadius + 1,
+		}.Op(gtx.Ops))
+
+	// Draw thumb.
+	paint.FillShape(gtx.Ops, s.thumbColor,
+		clip.Circle{
+			Center: f32.Point{X: thumbRadius, Y: thumbRadius},
+			Radius: thumbRadius,
+		}.Op(gtx.Ops))
+
+	// Set up click area.
+	stack = op.Save(gtx.Ops)
+	clickSize := gtx.Px(unit.Dp(40))
+	clickOff := f32.Point{
+		X: (float32(trackWidth) - float32(clickSize)) * .5,
+		Y: (float32(trackHeight)-float32(clickSize))*.5 + trackOff,
+	}
+	op.Offset(clickOff).Add(gtx.Ops)
+	sz := image.Pt(clickSize, clickSize)
+	pointer.Ellipse(image.Rectangle{Max: sz}).Add(gtx.Ops)
+	gtx.Constraints.Min = sz
+	s.Switch.Layout(gtx)
+	stack.Load()
+
+	dims := image.Point{X: trackWidth, Y: thumbSize}
+	return layout.Dimensions{Size: dims}
 }
 
 func (s *SwitchButtonText) Layout(gtx layout.Context) layout.Dimensions {
