@@ -89,6 +89,7 @@ func (pg *ticketPageList) Layout(gtx layout.Context) layout.Dimensions {
 						walletNameTooltip: c.theme.Tooltip(),
 						dateTooltip:       c.theme.Tooltip(),
 						daysBehindTooltip: c.theme.Tooltip(),
+						durationTooltip:   c.theme.Tooltip(),
 					})
 				}
 				return layout.Stack{Alignment: layout.N}.Layout(gtx,
