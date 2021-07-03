@@ -7,7 +7,7 @@ import (
 
 	"github.com/gen2brain/beeep"
 	"github.com/planetdecred/dcrlibwallet"
-	"github.com/planetdecred/dcrlibwallet/txhelper"
+	// "github.com/planetdecred/dcrlibwallet/dcrlibwallet"
 	"github.com/planetdecred/godcr/wallet"
 )
 
@@ -117,38 +117,60 @@ func (mp *mainPage) desktopNotifier(notifier interface{}) {
 		amount := strconv.FormatFloat(dcrlibwallet.AmountCoin(t.Amount), 'f', -1, 64)
 
 		defaultNotification := "Transaction notification of %s DCR"
-
 		notificationText := "You have %s %s DCR "
 
-		//get wallet details
-		if mp.pageCommon.wallet.LoadedWalletsCount() > 0 {
-			for _, w := range mp.pageCommon.info.Wallets {
-				if w.ID == t.WalletID {
-					switch {
-					case t.Direction == txhelper.TxDirectionReceived:
-						notification = fmt.Sprintf(notificationText+" in %s wallet", "received", amount, w.Name)
-					case t.Direction == txhelper.TxDirectionSent:
-						notification = fmt.Sprintf("You have sent %s DCR from %s wallet", amount, w.Name)
-					case t.Direction == txhelper.TxDirectionTransferred:
-						notification = fmt.Sprintf("You have transferred %s DCR to %s wallet", amount, w.Name)
-					default:
-						notification = fmt.Sprintf(defaultNotification+" to/from %s wallet", amount, w.Name)
-					}
-				} else {
-					switch {
-					case t.Direction == txhelper.TxDirectionReceived:
-						notification = fmt.Sprintf("You have received %s DCR", amount)
-					case t.Direction == txhelper.TxDirectionSent:
-						notification = fmt.Sprintf("You have sent %s DCR from %s wallet", amount, w.Name)
-					case t.Direction == txhelper.TxDirectionTransferred:
-						notification = fmt.Sprintf("You have transferred %s DCR to %s wallet", w.Name, amount)
-					default:
-						notification = fmt.Sprintf(defaultNotification+"to/from %s wallet", w.Name, amount)
-					}
+		wallet := mp.pageCommon.multiWallet.WalletWithID(t.WalletID)
+		if wallet == nil {
+			notification = fmt.Sprintf(defaultNotification, amount)
+			return
+		}
+
+		getAccount := func(acct int32) string {
+			var account string
+			accountName, err := wallet.AccountName(acct)
+			if err != nil {
+				log.Error(err)
+			} else {
+				account = accountName
+			}
+			return account
+		}
+
+		// get source account
+		var txSourceAccount string
+		if t.Direction == dcrlibwallet.TxDirectionSent ||
+			t.Direction == dcrlibwallet.TxDirectionTransferred {
+			for _, input := range t.Inputs {
+				if input.AccountNumber != -1 {
+					txSourceAccount = getAccount(input.AccountNumber)
 				}
 			}
-		} else {
-			notification = fmt.Sprintf(defaultNotification, amount)
+		}
+
+		//get distination account
+		var txDestAccount, txDestinationAddress string
+		if t.Direction == dcrlibwallet.TxDirectionTransferred ||
+			t.Direction == dcrlibwallet.TxDirectionReceived ||
+			t.Direction == dcrlibwallet.TxDirectionSent {
+			for _, output := range t.Outputs {
+				if output.AccountNumber != -1 {
+					txDestAccount = getAccount(output.AccountNumber)
+				}
+				if output.AccountNumber == -1 {
+					txDestinationAddress = output.Address
+				}
+			}
+		}
+
+		switch {
+		case t.Direction == dcrlibwallet.TxDirectionReceived:
+			notification = fmt.Sprintf(notificationText+"to %s account in %s wallet.", "received", amount, txDestAccount, wallet.Name)
+		case t.Direction == dcrlibwallet.TxDirectionSent:
+			notification = fmt.Sprintf(notificationText+"from %s account in %s wallet to %s.", "sent", amount, wallet.Name, txSourceAccount, txDestinationAddress)
+		case t.Direction == dcrlibwallet.TxDirectionTransferred:
+			notification = fmt.Sprintf(notificationText+"from %s account, to %s account in %s wallet.", "transferred", amount, txSourceAccount, txDestAccount, wallet.Name)
+		default:
+			notification = fmt.Sprintf(defaultNotification+" to/from (%s wallet) account %s", amount, wallet.Name, txSourceAccount)
 		}
 	case dcrlibwallet.Proposal:
 	}
