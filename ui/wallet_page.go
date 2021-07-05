@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"image/color"
 
 	"gioui.org/gesture"
@@ -228,8 +229,21 @@ func (pg *walletPage) getWalletMenu(wal *dcrlibwallet.Wallet) []menuItem {
 				textModal := newTextInputModal(common).
 					hint("Wallet name").
 					positiveButton(values.String(values.StrRename), func(newName string, tim *textInputModal) bool {
-						// todo handle error
-						pg.multiWallet.RenameWallet(wal.ID, newName)
+						tim.setError("") // clear error first
+
+						if err := pg.validateWalletName(newName); err != nil {
+							tim.setLoadingState(false)
+							tim.setError(err.Error())
+							return false
+						}
+
+						err := pg.multiWallet.RenameWallet(wal.ID, newName)
+						if err != nil {
+							tim.setLoadingState(false)
+							tim.setError(err.Error())
+							return false
+						}
+
 						return true
 					})
 
@@ -244,6 +258,14 @@ func (pg *walletPage) getWalletMenu(wal *dcrlibwallet.Wallet) []menuItem {
 			id:     PageSettings,
 		},
 	}
+}
+
+func (pg *walletPage) validateWalletName(walletName string) error {
+	if walletName == "" {
+		return fmt.Errorf("%s %s", values.String(values.StrWalletName), values.String(values.StrCannotBeEmpty))
+	}
+
+	return nil
 }
 
 func (pg *walletPage) getWatchOnlyWalletMenu(wal *dcrlibwallet.Wallet) []menuItem {
