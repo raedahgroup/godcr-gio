@@ -4,6 +4,7 @@
 package ui
 
 import (
+	"fmt"
 	"image"
 	"strings"
 	"time"
