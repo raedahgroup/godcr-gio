@@ -7,7 +7,6 @@ import (
 
 	"github.com/gen2brain/beeep"
 	"github.com/planetdecred/dcrlibwallet"
-	// "github.com/planetdecred/dcrlibwallet/dcrlibwallet"
 	"github.com/planetdecred/godcr/wallet"
 )
 
@@ -41,11 +40,26 @@ func (mp *mainPage) OnAccountMixerStarted(walletID int) {}
 func (mp *mainPage) OnAccountMixerEnded(walletID int)   {}
 
 // Politeia notifications
-func (mp *mainPage) OnProposalsSynced()                            {}
-func (mp *mainPage) OnNewProposal(proposal *dcrlibwallet.Proposal) {}
+func (mp *mainPage) OnProposalsSynced() {}
+func (mp *mainPage) OnNewProposal(proposal *dcrlibwallet.Proposal) {
+	prop := new(wallet.Proposal)
+	prop.Proposal = proposal
+	prop.ProposalStatus = wallet.NewProposalFound
+	mp.desktopNotifier(prop)
+}
 
-func (mp *mainPage) OnProposalVoteStarted(proposal *dcrlibwallet.Proposal)  {}
-func (mp *mainPage) OnProposalVoteFinished(proposal *dcrlibwallet.Proposal) {}
+func (mp *mainPage) OnProposalVoteStarted(proposal *dcrlibwallet.Proposal) {
+	prop := new(wallet.Proposal)
+	prop.Proposal = proposal
+	prop.ProposalStatus = wallet.VoteStarted
+	mp.desktopNotifier(prop)
+}
+func (mp *mainPage) OnProposalVoteFinished(proposal *dcrlibwallet.Proposal) {
+	prop := new(wallet.Proposal)
+	prop.Proposal = proposal
+	prop.ProposalStatus = wallet.VoteFinished
+	mp.desktopNotifier(prop)
+}
 
 // Sync notifications
 
@@ -77,6 +91,7 @@ func (mp *mainPage) OnHeadersFetchProgress(headersFetchProgress *dcrlibwallet.He
 		},
 	}
 }
+
 func (mp *mainPage) OnAddressDiscoveryProgress(addressDiscoveryProgress *dcrlibwallet.AddressDiscoveryProgressReport) {
 	mp.notificationsUpdate <- wallet.SyncStatusUpdate{
 		Stage: wallet.AddressDiscoveryProgress,
@@ -94,6 +109,7 @@ func (mp *mainPage) OnHeadersRescanProgress(headersRescanProgress *dcrlibwallet.
 		},
 	}
 }
+
 func (mp *mainPage) OnSyncCompleted() {
 	mp.updateBalance()
 	mp.notificationsUpdate <- wallet.SyncStatusUpdate{
@@ -106,7 +122,9 @@ func (mp *mainPage) OnSyncCanceled(willRestart bool) {
 		Stage: wallet.SyncCanceled,
 	}
 }
-func (mp *mainPage) OnSyncEndedWithError(err error)          {}
+
+func (mp *mainPage) OnSyncEndedWithError(err error) {}
+
 func (mp *mainPage) Debug(debugInfo *dcrlibwallet.DebugInfo) {}
 
 func (mp *mainPage) desktopNotifier(notifier interface{}) {
@@ -172,8 +190,20 @@ func (mp *mainPage) desktopNotifier(notifier interface{}) {
 		default:
 			notification = fmt.Sprintf(defaultNotification+" to/from (%s wallet) account %s", amount, wallet.Name, txSourceAccount)
 		}
-	case dcrlibwallet.Proposal:
+	case wallet.Proposal:
+		fmt.Println(t.ProposalStatus)
+		switch {
+		case t.ProposalStatus == wallet.NewProposalFound:
+			notification = fmt.Sprintf("A new proposal has been added Token: %s", t.Proposal.Token)
+		case t.ProposalStatus == wallet.VoteStarted:
+			notification = fmt.Sprintf("Voting has started for proposal with Token: %s", t.Proposal.Token)
+		case t.ProposalStatus == wallet.VoteFinished:
+			notification = fmt.Sprintf("Voting has ended for proposal with Token: %s", t.Proposal.Token)
+		default:
+			notification = fmt.Sprintf("New update for proposal with Token", t.Proposal.Token)
+		}
 	}
+	fmt.Println(t)
 
 	err := beeep.Notify("Decred Godcr Wallet", notification, "assets/information.png")
 	if err != nil {

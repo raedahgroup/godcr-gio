@@ -95,6 +95,7 @@ func (win *Window) updateStates(update interface{}) {
 	win.wallet.GetMultiWalletInfo()
 	win.wallet.GetAllTransactions(0, 0, 0)
 	win.wallet.GetAllTickets()
+	// win.wallet.ClearProposals()
 	win.wallet.GetAllProposals()
 	op.InvalidateOp{}.Add(win.ops)
 	log.Debugf("Updated with multiwallet info: %+v\n and window state %+v", win.walletInfo, win.states)

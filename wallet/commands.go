@@ -683,6 +683,13 @@ func (wal *Wallet) GetAllProposals() {
 	}()
 }
 
+func (wal *Wallet) ClearProposals() {
+	err := wal.multi.Politeia.ClearSavedProposals()
+	if err != nil {
+		return
+	}
+}
+
 func (wal *Wallet) FetchProposalDescription(token string) (string, error) {
 	return wal.multi.Politeia.FetchProposalDescription(dcrlibwallet.PoliteiaMainnetHost, token)
 }
