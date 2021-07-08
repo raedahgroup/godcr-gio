@@ -222,4 +222,6 @@ const (
 	StrFrench                      = "french"
 	StrUsdBittrex                  = "usdBittrex"
 	StrNone                        = "none"
+	StrWalletName                  = "walletName"
+	StrCannotBeEmpty               = "cannotBeEmpty"
 )

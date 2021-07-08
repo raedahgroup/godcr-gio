@@ -59,6 +59,10 @@ func (tm *textInputModal) setError(err string) {
 	}
 }
 
+func (tm *textInputModal) setLoadingState(isLoading bool) {
+	tm.isLoading = isLoading
+}
+
 func (tm *textInputModal) handle() {
 
 	for tm.btnPositve.Button.Clicked() {
