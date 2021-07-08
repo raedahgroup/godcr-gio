@@ -65,6 +65,7 @@ type ticketPage struct {
 	spendingPassword decredmaterial.Editor
 	addVSP           decredmaterial.Button
 	vspErrChan       chan error
+	ticketTooltips   []tooltips
 
 	isPurchaseLoading bool
 }
@@ -287,9 +288,18 @@ func (pg *ticketPage) ticketsLiveSection(gtx layout.Context, c *pageCommon) layo
 			}),
 			layout.Rigid(func(gtx C) D {
 				tickets := (*pg.tickets).LiveRecent
+				for range tickets {
+					pg.ticketTooltips = append(pg.ticketTooltips, tooltips{
+						statusTooltip:     c.theme.Tooltip(),
+						walletNameTooltip: c.theme.Tooltip(),
+						dateTooltip:       c.theme.Tooltip(),
+						daysBehindTooltip: c.theme.Tooltip(),
+						durationTooltip:   c.theme.Tooltip(),
+					})
+				}
 				return pg.ticketsLive.Layout(gtx, len(tickets), func(gtx C, index int) D {
 					return layout.Inset{Right: values.MarginPadding8}.Layout(gtx, func(gtx C) D {
-						return ticketCard(gtx, c, &tickets[index], c.theme.Tooltip())
+						return ticketCard(gtx, c, &tickets[index], pg.ticketTooltips[index])
 					})
 				})
 			}),
