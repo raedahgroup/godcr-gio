@@ -67,7 +67,7 @@ func (pg *utxoPage) OnResume() {
 
 }
 
-func (pg *utxoPage) handle() {
+func (pg *utxoPage) Handle() {
 	common := pg.common
 	pg.selectedWalletID = common.info.Wallets[*common.selectedWallet].ID
 	pg.selectedAccountID = common.info.Wallets[*common.selectedWallet].Accounts[*common.selectedAccount].Number
@@ -294,4 +294,4 @@ func (pg *utxoPage) utxoRow(gtx layout.Context, data *wallet.UnspentOutput, c *p
 	)
 }
 
-func (pg *utxoPage) onClose() {}
+func (pg *utxoPage) OnClose() {}

@@ -83,7 +83,7 @@ func (pg *proposalDetails) OnResume() {
 
 }
 
-func (pg *proposalDetails) handle() {
+func (pg *proposalDetails) Handle() {
 	for token := range pg.proposalItems {
 		for location, clickable := range pg.proposalItems[token].clickables {
 			if clickable.Clicked() {
@@ -429,4 +429,4 @@ func (pg *proposalDetails) Layout(gtx C) D {
 	return common.UniformPadding(gtx, body)
 }
 
-func (pg *proposalDetails) onClose() {}
+func (pg *proposalDetails) OnClose() {}

@@ -3,6 +3,9 @@ package ui
 import (
 	"os"
 
+	"github.com/planetdecred/godcr/ui/load"
+	"github.com/planetdecred/godcr/ui/page"
+
 	"gioui.org/layout"
 	"gioui.org/text"
 	"gioui.org/widget"
@@ -11,10 +14,11 @@ import (
 	"github.com/planetdecred/godcr/ui/values"
 )
 
-const PageStart = "start_page"
+const Start = "start_page"
 
 type startPage struct {
 	*pageCommon
+	load *load.Load
 
 	loading bool
 
@@ -26,9 +30,10 @@ type startPage struct {
 	restoreButton decredmaterial.Button
 }
 
-func newStartPage(common *pageCommon) *startPage {
+func newStartPage(common *pageCommon, l *load.Load) Page {
 	sp := &startPage{
 		pageCommon: common,
+		load:       l,
 
 		loading: true,
 
@@ -55,6 +60,7 @@ func newStartPage(common *pageCommon) *startPage {
 func (sp *startPage) OnResume() {
 	sp.wallet.InitMultiWallet()
 	sp.multiWallet = sp.wallet.GetMultiWallet()
+	sp.load.WL.MultiWallet = sp.wallet.GetMultiWallet()
 
 	// refresh theme now that config is available
 	sp.refreshTheme()
@@ -109,10 +115,10 @@ func (sp *startPage) openWallets(passphrase string) error {
 
 func (sp *startPage) proceedToMainPage() {
 	sp.wallet.SetupListeners()
-	sp.changeWindowPage(newMainPage(sp.pageCommon), false)
+	sp.changeWindowPage(newMainPage(sp.pageCommon, sp.load), false)
 }
 
-func (sp *startPage) handle() {
+func (sp *startPage) Handle() {
 	for sp.createButton.Button.Clicked() {
 		newCreatePasswordModal(sp.pageCommon).
 			title("Create new wallet").
@@ -133,11 +139,11 @@ func (sp *startPage) handle() {
 	}
 
 	for sp.restoreButton.Button.Clicked() {
-		sp.changeWindowPage(CreateRestorePage(sp.pageCommon), true)
+		sp.changeWindowPage(page.NewCreateRestorePage(sp.load), true)
 	}
 }
 
-func (sp *startPage) onClose() {}
+func (sp *startPage) OnClose() {}
 
 func (sp *startPage) Layout(gtx layout.Context) layout.Dimensions {
 	gtx.Constraints.Min = gtx.Constraints.Max // use maximum height & width

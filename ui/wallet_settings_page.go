@@ -6,6 +6,7 @@ import (
 
 	"github.com/planetdecred/dcrlibwallet"
 	"github.com/planetdecred/godcr/ui/decredmaterial"
+	"github.com/planetdecred/godcr/ui/page"
 	"github.com/planetdecred/godcr/ui/values"
 )
 
@@ -62,7 +63,7 @@ func (pg *walletSettingsPage) Layout(gtx layout.Context) layout.Dimensions {
 			walletName: pg.wallet.Name,
 			backButton: pg.backButton,
 			back: func() {
-				common.changePage(PageWallet)
+				common.changePage(page.WalletPageID)
 			},
 			body: func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -175,7 +176,7 @@ func (pg *walletSettingsPage) bottomSectionLabel(title string) layout.Widget {
 	}
 }
 
-func (pg *walletSettingsPage) handle() {
+func (pg *walletSettingsPage) Handle() {
 	common := pg.common
 	for pg.changePass.Clicked() {
 		newPasswordModal(common).
@@ -270,7 +271,7 @@ func (pg *walletSettingsPage) handle() {
 								return
 							}
 							pm.Dismiss()
-							pm.changePage(PageWallet)
+							pm.changePage(page.WalletPageID)
 						}()
 						return false
 					}).Show()
@@ -280,4 +281,4 @@ func (pg *walletSettingsPage) handle() {
 	}
 }
 
-func (pg *walletSettingsPage) onClose() {}
+func (pg *walletSettingsPage) OnClose() {}

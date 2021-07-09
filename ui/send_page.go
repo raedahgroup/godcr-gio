@@ -13,6 +13,7 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/planetdecred/dcrlibwallet"
 	"github.com/planetdecred/godcr/ui/decredmaterial"
+	"github.com/planetdecred/godcr/ui/page"
 	"github.com/planetdecred/godcr/ui/values"
 	"github.com/planetdecred/godcr/wallet"
 )
@@ -826,7 +827,7 @@ func (pg *sendPage) watchForBroadcastResult(c *pageCommon) {
 	}
 
 	if pg.broadcastResult.TxHash != "" {
-		*c.page = PageOverview
+		*c.page = page.OverviewPageID
 		c.notify("1 Transaction Sent", true)
 
 		if pg.remainingBalance != -1 {
@@ -954,7 +955,7 @@ func (pg *sendPage) sendFund() {
 	pg.wallet.BroadcastTransaction(pg.txAuthor, []byte(pg.passwordEditor.Editor.Text()), pg.broadcastErrChan)
 }
 
-func (pg *sendPage) handle() {
+func (pg *sendPage) Handle() {
 	c := pg.common
 	sendAcct := pg.sourceAccountSelector.selectedAccount
 
@@ -1002,7 +1003,7 @@ func (pg *sendPage) handle() {
 
 	currencyExchangeValue := pg.wallet.ReadStringConfigValueForKey(dcrlibwallet.CurrencyConversionConfigKey)
 	pg.usdExchangeSet = false
-	if currencyExchangeValue == USDExchangeValue {
+	if currencyExchangeValue == page.USDExchangeValue {
 		pg.usdExchangeSet = true
 	}
 
@@ -1117,6 +1118,6 @@ func (pg *sendPage) handle() {
 	}
 }
 
-func (pg *sendPage) onClose() {
+func (pg *sendPage) OnClose() {
 
 }

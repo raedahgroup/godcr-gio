@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/planetdecred/dcrlibwallet"
+	"github.com/planetdecred/godcr/ui/page"
 	"github.com/planetdecred/godcr/wallet"
 )
 
@@ -17,17 +18,17 @@ func (mp *mainPage) OnTransaction(transaction string) {
 	var tx dcrlibwallet.Transaction
 	err := json.Unmarshal([]byte(transaction), &tx)
 	if err == nil {
-		mp.notificationsUpdate <- wallet.NewTransaction{
+		mp.updateNotification(wallet.NewTransaction{
 			Transaction: &tx,
-		}
+		})
 	}
 }
 
 func (mp *mainPage) OnBlockAttached(walletID int, blockHeight int32) {
 	mp.updateBalance()
-	mp.notificationsUpdate <- wallet.SyncStatusUpdate{
+	mp.updateNotification(wallet.SyncStatusUpdate{
 		Stage: wallet.BlockAttached,
-	}
+	})
 }
 
 func (mp *mainPage) OnTransactionConfirmed(walletID int, hash string, blockHeight int32) {
@@ -68,61 +69,72 @@ func (mp *mainPage) OnProposalVoteFinished(proposal *dcrlibwallet.Proposal) {
 // Sync notifications
 
 func (mp *mainPage) OnSyncStarted(wasRestarted bool) {
-	mp.notificationsUpdate <- wallet.SyncStatusUpdate{
+	mp.updateNotification(wallet.SyncStatusUpdate{
 		Stage: wallet.SyncStarted,
-	}
+	})
 }
 
 func (mp *mainPage) OnPeerConnectedOrDisconnected(numberOfConnectedPeers int32) {
-	mp.notificationsUpdate <- wallet.SyncStatusUpdate{
+	mp.updateNotification(wallet.SyncStatusUpdate{
 		Stage:          wallet.PeersConnected,
 		ConnectedPeers: numberOfConnectedPeers,
-	}
+	})
 }
 
 func (mp *mainPage) OnCFiltersFetchProgress(cfiltersFetchProgress *dcrlibwallet.CFiltersFetchProgressReport) {
-	mp.notificationsUpdate <- wallet.SyncStatusUpdate{
+	mp.updateNotification(wallet.SyncStatusUpdate{
 		Stage:          wallet.CfiltersFetchProgress,
 		ProgressReport: cfiltersFetchProgress,
-	}
+	})
 }
 
 func (mp *mainPage) OnHeadersFetchProgress(headersFetchProgress *dcrlibwallet.HeadersFetchProgressReport) {
-	mp.notificationsUpdate <- wallet.SyncStatusUpdate{
+	mp.updateNotification(wallet.SyncStatusUpdate{
 		Stage: wallet.HeadersFetchProgress,
 		ProgressReport: wallet.SyncHeadersFetchProgress{
 			Progress: headersFetchProgress,
 		},
-	}
+	})
 }
 func (mp *mainPage) OnAddressDiscoveryProgress(addressDiscoveryProgress *dcrlibwallet.AddressDiscoveryProgressReport) {
-	mp.notificationsUpdate <- wallet.SyncStatusUpdate{
+	mp.updateNotification(wallet.SyncStatusUpdate{
 		Stage: wallet.AddressDiscoveryProgress,
 		ProgressReport: wallet.SyncAddressDiscoveryProgress{
 			Progress: addressDiscoveryProgress,
 		},
-	}
+	})
 }
 
 func (mp *mainPage) OnHeadersRescanProgress(headersRescanProgress *dcrlibwallet.HeadersRescanProgressReport) {
-	mp.notificationsUpdate <- wallet.SyncStatusUpdate{
+	mp.updateNotification(wallet.SyncStatusUpdate{
 		Stage: wallet.HeadersRescanProgress,
 		ProgressReport: wallet.SyncHeadersRescanProgress{
 			Progress: headersRescanProgress,
 		},
-	}
+	})
 }
 func (mp *mainPage) OnSyncCompleted() {
 	mp.updateBalance()
-	mp.notificationsUpdate <- wallet.SyncStatusUpdate{
+	mp.updateNotification(wallet.SyncStatusUpdate{
 		Stage: wallet.SyncCompleted,
-	}
+	})
 }
 
 func (mp *mainPage) OnSyncCanceled(willRestart bool) {
-	mp.notificationsUpdate <- wallet.SyncStatusUpdate{
+	mp.updateNotification(wallet.SyncStatusUpdate{
 		Stage: wallet.SyncCanceled,
-	}
+	})
 }
 func (mp *mainPage) OnSyncEndedWithError(err error)          {}
 func (mp *mainPage) Debug(debugInfo *dcrlibwallet.DebugInfo) {}
+
+// todo: this will be removed when all pages have been moved to the page package
+// updateNotification sends notification to the notification channel depending on which channel the page uses
+func (mp *mainPage) updateNotification(signal interface{}) {
+	switch *mp.page {
+	case page.OverviewPageID, page.Transactions:
+		mp.load.Receiver.NotificationsUpdate <- signal
+	default:
+		mp.notificationsUpdate <- signal
+	}
+}

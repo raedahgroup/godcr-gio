@@ -1,7 +1,8 @@
-package ui
+package page
 
 import (
 	"fmt"
+
 	"image/color"
 	"strings"
 
@@ -14,13 +15,14 @@ import (
 
 	"github.com/planetdecred/dcrlibwallet"
 	"github.com/planetdecred/godcr/ui/decredmaterial"
+	"github.com/planetdecred/godcr/ui/load"
 	"github.com/planetdecred/godcr/ui/values"
 	"golang.org/x/exp/shiny/materialdesign/icons"
 )
 
 const (
-	PageCreateRestore = "CreateRestore"
-	numberOfSeeds     = 32
+	CreateRestorePageID = "CreateRestore"
+	numberOfSeeds       = 32
 )
 
 type (
@@ -35,9 +37,8 @@ type seedItemMenu struct {
 	button decredmaterial.Button
 }
 
-type createRestore struct {
-	common          *pageCommon
-	theme           *decredmaterial.Theme
+type CreateRestore struct {
+	*load.Load
 	restoringWallet bool
 	keyEvent        chan *key.Event
 	seedPhrase      string
@@ -75,21 +76,20 @@ type createRestore struct {
 }
 
 // Loading lays out the loading widget with a faded background
-func CreateRestorePage(common *pageCommon) Page {
-	pg := &createRestore{
-		common:   common,
-		theme:    common.theme,
-		keyEvent: common.keyEvents,
+func NewCreateRestorePage(l *load.Load) *CreateRestore {
+	pg := &CreateRestore{
+		Load:     l,
+		keyEvent: l.Receiver.KeyEvents,
 
-		errLabel:              common.theme.Body1(""),
-		spendingPassword:      common.theme.EditorPassword(new(widget.Editor), "Spending password"),
-		walletName:            common.theme.Editor(new(widget.Editor), "Wallet name"),
-		matchSpendingPassword: common.theme.EditorPassword(new(widget.Editor), "Confirm spending password"),
+		errLabel:              l.Theme.Body1(""),
+		spendingPassword:      l.Theme.EditorPassword(new(widget.Editor), "Spending password"),
+		walletName:            l.Theme.Editor(new(widget.Editor), "Wallet name"),
+		matchSpendingPassword: l.Theme.EditorPassword(new(widget.Editor), "Confirm spending password"),
 		suggestionLimit:       3,
-		createModal:           common.theme.Modal(),
-		warningModal:          common.theme.Modal(),
-		modalTitleLabel:       common.theme.H6(""),
-		passwordStrength:      common.theme.ProgressBar(0),
+		createModal:           l.Theme.Modal(),
+		warningModal:          l.Theme.Modal(),
+		modalTitleLabel:       l.Theme.H6(""),
+		passwordStrength:      l.Theme.ProgressBar(0),
 		openPopupIndex:        -1,
 		restoreContainer: layout.List{
 			Axis:      layout.Vertical,
@@ -97,24 +97,24 @@ func CreateRestorePage(common *pageCommon) Page {
 		},
 	}
 
-	if pg.common.multiWallet.LoadedWalletsCount() == 0 {
+	if pg.WL.MultiWallet.LoadedWalletsCount() == 0 {
 		pg.walletName.Editor.SetText("mywallet")
 	}
 
-	pg.optionsMenuCard = decredmaterial.Card{Color: pg.theme.Color.Surface}
+	pg.optionsMenuCard = decredmaterial.Card{Color: pg.Theme.Color.Surface}
 	pg.optionsMenuCard.Radius = decredmaterial.CornerRadius{NE: 5, NW: 5, SE: 5, SW: 5}
 
-	pg.restoreWalletBtn = common.theme.Button(new(widget.Clickable), "Restore")
+	pg.restoreWalletBtn = l.Theme.Button(new(widget.Clickable), "Restore")
 
-	pg.closePageBtn = common.theme.IconButton(new(widget.Clickable), mustIcon(widget.NewIcon(icons.NavigationClose)))
+	pg.closePageBtn = l.Theme.IconButton(new(widget.Clickable), mustIcon(widget.NewIcon(icons.NavigationClose)))
 	pg.closePageBtn.Background = color.NRGBA{}
-	pg.closePageBtn.Color = common.theme.Color.Hint
+	pg.closePageBtn.Color = l.Theme.Color.Hint
 
-	pg.resetSeedFields = common.theme.Button(new(widget.Clickable), "Clear all")
-	pg.resetSeedFields.Color = common.theme.Color.Hint
+	pg.resetSeedFields = l.Theme.Button(new(widget.Clickable), "Clear all")
+	pg.resetSeedFields.Color = l.Theme.Color.Hint
 	pg.resetSeedFields.Background = color.NRGBA{}
 
-	pg.alertIcon = common.icons.alertGray
+	pg.alertIcon = pg.Icons.AlertGray
 	pg.alertIcon.Scale = 1.0
 
 	pg.restoreWalletBtn.Inset = layout.Inset{
@@ -123,16 +123,16 @@ func CreateRestorePage(common *pageCommon) Page {
 		Right:  values.MarginPadding50,
 		Left:   values.MarginPadding50,
 	}
-	pg.restoreWalletBtn.Background = common.theme.Color.InactiveGray
+	pg.restoreWalletBtn.Background = l.Theme.Color.InactiveGray
 	pg.restoreWalletBtn.TextSize = values.TextSize16
-	pg.errLabel.Color = pg.theme.Color.Danger
+	pg.errLabel.Color = pg.Theme.Color.Danger
 
-	pg.passwordStrength.Color = pg.theme.Color.LightGray
+	pg.passwordStrength.Color = pg.Theme.Color.LightGray
 
 	for i := 0; i <= numberOfSeeds; i++ {
 		widgetEditor := new(widget.Editor)
 		widgetEditor.SingleLine, widgetEditor.Submit = true, true
-		pg.seedEditors.editors = append(pg.seedEditors.editors, common.theme.RestoreEditor(widgetEditor, "", fmt.Sprintf("%d", i+1)))
+		pg.seedEditors.editors = append(pg.seedEditors.editors, l.Theme.RestoreEditor(widgetEditor, "", fmt.Sprintf("%d", i+1)))
 	}
 	pg.seedEditors.focusIndex = -1
 
@@ -148,11 +148,11 @@ func CreateRestorePage(common *pageCommon) Page {
 	return pg
 }
 
-func (pg *createRestore) OnResume() {
+func (pg *CreateRestore) OnResume() {
 
 }
 
-func (pg *createRestore) Layout(gtx layout.Context) layout.Dimensions {
+func (pg *CreateRestore) Layout(gtx layout.Context) layout.Dimensions {
 	pd := values.MarginPadding15
 	dims := layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceBetween}.Layout(gtx,
 		layout.Rigid(func(gtx C) D {
@@ -166,9 +166,9 @@ func (pg *createRestore) Layout(gtx layout.Context) layout.Dimensions {
 	return dims
 }
 
-func (pg *createRestore) restore(gtx layout.Context) layout.Dimensions {
+func (pg *CreateRestore) restore(gtx layout.Context) layout.Dimensions {
 	op.TransformOp{}.Add(gtx.Ops)
-	paint.Fill(gtx.Ops, pg.theme.Color.LightGray)
+	paint.Fill(gtx.Ops, pg.Theme.Color.LightGray)
 	dims := layout.Stack{Alignment: layout.S}.Layout(gtx,
 		layout.Expanded(func(gtx C) D {
 			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -180,7 +180,7 @@ func (pg *createRestore) restore(gtx layout.Context) layout.Dimensions {
 									return layout.Inset{Top: values.MarginPadding6}.Layout(gtx, pg.closePageBtn.Layout)
 								}),
 								layout.Rigid(func(gtx C) D {
-									return layout.Inset{Top: values.MarginPadding16}.Layout(gtx, pg.theme.H6("Restore wallet").Layout)
+									return layout.Inset{Top: values.MarginPadding16}.Layout(gtx, pg.Theme.H6("Restore wallet").Layout)
 								}),
 							)
 						})
@@ -220,8 +220,8 @@ func (pg *createRestore) restore(gtx layout.Context) layout.Dimensions {
 	return dims
 }
 
-func (pg *createRestore) restoreButtonSection(gtx layout.Context) layout.Dimensions {
-	card := pg.theme.Card()
+func (pg *CreateRestore) restoreButtonSection(gtx layout.Context) layout.Dimensions {
+	card := pg.Theme.Card()
 	card.Radius = decredmaterial.CornerRadius{NE: 0, NW: 0, SE: 0, SW: 0}
 	return card.Layout(gtx, func(gtx C) D {
 		return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
@@ -238,7 +238,7 @@ func (pg *createRestore) restoreButtonSection(gtx layout.Context) layout.Dimensi
 	})
 }
 
-func (pg *createRestore) enterSeedPhase(gtx layout.Context) layout.Dimensions {
+func (pg *CreateRestore) enterSeedPhase(gtx layout.Context) layout.Dimensions {
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx C) D {
 			inset := layout.Inset{
@@ -276,11 +276,11 @@ func (pg *createRestore) enterSeedPhase(gtx layout.Context) layout.Dimensions {
 
 }
 
-func (pg *createRestore) createPasswordPhase(gtx layout.Context) layout.Dimensions {
+func (pg *CreateRestore) createPasswordPhase(gtx layout.Context) layout.Dimensions {
 	phaseContents := []func(gtx C) D{
 		func(gtx C) D {
-			card := pg.theme.Card()
-			card.Color = pg.theme.Color.LightGray
+			card := pg.Theme.Card()
+			card.Color = pg.Theme.Color.LightGray
 			msg := "This spending password is required to sign transactions. Make sure to use a strong password and keep it safe."
 			return card.Layout(gtx, func(gtx C) D {
 				gtx.Constraints.Min.X = gtx.Constraints.Max.X
@@ -293,7 +293,7 @@ func (pg *createRestore) createPasswordPhase(gtx layout.Context) layout.Dimensio
 							}
 							return inset.Layout(gtx, pg.alertIcon.Layout)
 						}),
-						layout.Rigid(pg.theme.Body1(msg).Layout),
+						layout.Rigid(pg.Theme.Body1(msg).Layout),
 					)
 				})
 			})
@@ -314,13 +314,13 @@ func (pg *createRestore) createPasswordPhase(gtx layout.Context) layout.Dimensio
 	})
 }
 
-func (pg *createRestore) renameWalletPhase(gtx layout.Context) layout.Dimensions {
+func (pg *CreateRestore) renameWalletPhase(gtx layout.Context) layout.Dimensions {
 	return pg.walletName.Layout(gtx)
 }
 
-func (pg *createRestore) restorePageSections(gtx layout.Context, title string, phaseProgress string, body layout.Widget) layout.Dimensions {
+func (pg *CreateRestore) restorePageSections(gtx layout.Context, title string, phaseProgress string, body layout.Widget) layout.Dimensions {
 	return layout.Inset{Bottom: values.MarginPadding10}.Layout(gtx, func(gtx C) D {
-		return pg.theme.Card().Layout(gtx, func(gtx C) D {
+		return pg.Theme.Card().Layout(gtx, func(gtx C) D {
 			return layout.UniformInset(values.MarginPadding16).Layout(gtx, func(gtx C) D {
 				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 					layout.Rigid(func(gtx C) D {
@@ -328,7 +328,7 @@ func (pg *createRestore) restorePageSections(gtx layout.Context, title string, p
 						v := values.MarginPadding5
 						return Container{padding: layout.Inset{Right: v, Left: v, Bottom: m}}.Layout(gtx, func(gtx C) D {
 							gtx.Constraints.Min.X = gtx.Constraints.Max.X
-							txt := pg.theme.Body1(title)
+							txt := pg.Theme.Body1(title)
 							return layout.Flex{
 								Axis:    layout.Horizontal,
 								Spacing: layout.SpaceBetween,
@@ -336,11 +336,11 @@ func (pg *createRestore) restorePageSections(gtx layout.Context, title string, p
 								layout.Rigid(txt.Layout),
 								layout.Rigid(func(gtx C) D {
 									border := widget.Border{
-										Color:        pg.theme.Color.Gray1,
+										Color:        pg.Theme.Color.Gray1,
 										CornerRadius: values.MarginPadding14,
 										Width:        values.MarginPadding1,
 									}
-									phase := pg.theme.Body2(phaseProgress)
+									phase := pg.Theme.Body2(phaseProgress)
 									return border.Layout(gtx, func(gtx C) D {
 										m := values.MarginPadding8
 										v := values.MarginPadding5
@@ -362,17 +362,17 @@ func (pg *createRestore) restorePageSections(gtx layout.Context, title string, p
 	})
 }
 
-func (pg *createRestore) processing(gtx layout.Context) layout.Dimensions {
+func (pg *CreateRestore) processing(gtx layout.Context) layout.Dimensions {
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Flexed(1, func(gtx C) D {
-			message := pg.theme.H3("")
+			message := pg.Theme.H3("")
 			message.Alignment = text.Middle
 			message.Text = "restoring wallet..."
 			return layout.Center.Layout(gtx, message.Layout)
 		}))
 }
 
-func (pg *createRestore) inputsGroup(gtx layout.Context, l *layout.List, len, startIndex int) layout.Dimensions {
+func (pg *CreateRestore) inputsGroup(gtx layout.Context, l *layout.List, len, startIndex int) layout.Dimensions {
 	return layout.Stack{Alignment: layout.N}.Layout(gtx,
 		layout.Expanded(func(gtx C) D {
 			return l.Layout(gtx, len, func(gtx C, i int) D {
@@ -389,7 +389,7 @@ func (pg *createRestore) inputsGroup(gtx layout.Context, l *layout.List, len, st
 	)
 }
 
-func (pg *createRestore) onSuggestionSeedsClicked() {
+func (pg *CreateRestore) onSuggestionSeedsClicked() {
 	index := pg.seedEditors.focusIndex
 	for i, b := range pg.seedMenu {
 		for pg.seedMenu[i].button.Button.Clicked() {
@@ -421,7 +421,7 @@ func diff(a, b []int) []int {
 	return f
 }
 
-func (pg *createRestore) editorSeedsEventsHandler() {
+func (pg *CreateRestore) editorSeedsEventsHandler() {
 	var focused []int
 
 	seedEvent := func(i int, text string) {
@@ -452,7 +452,7 @@ func (pg *createRestore) editorSeedsEventsHandler() {
 			switch e.(type) {
 			case widget.ChangeEvent:
 				seedEvent(i, text)
-				pg.resetSeedFields.Color = pg.theme.Color.Primary
+				pg.resetSeedFields.Color = pg.Theme.Color.Primary
 				pg.suggestions = pg.suggestionSeeds(text)
 				pg.seedMenu = pg.seedMenu[:len(pg.suggestions)]
 				for k, s := range pg.suggestions {
@@ -473,10 +473,10 @@ func (pg *createRestore) editorSeedsEventsHandler() {
 	pg.focused = focused
 }
 
-func (pg *createRestore) initSeedMenu() {
+func (pg *CreateRestore) initSeedMenu() {
 	for i := 0; i < pg.suggestionLimit; i++ {
-		btn := pg.theme.Button(new(widget.Clickable), "")
-		btn.Background, btn.Color = color.NRGBA{}, pg.theme.Color.DeepBlue
+		btn := pg.Theme.Button(new(widget.Clickable), "")
+		btn.Background, btn.Color = color.NRGBA{}, pg.Theme.Color.DeepBlue
 		pg.seedMenu = append(pg.seedMenu, seedItemMenu{
 			text:   "",
 			button: btn,
@@ -484,17 +484,17 @@ func (pg *createRestore) initSeedMenu() {
 	}
 }
 
-func (pg *createRestore) suggestionSeedEffect() {
+func (pg *CreateRestore) suggestionSeedEffect() {
 	for k := range pg.suggestions {
 		if pg.selected == k || pg.seedMenu[k].button.Button.Hovered() {
-			pg.seedMenu[k].button.Background = pg.theme.Color.LightGray
+			pg.seedMenu[k].button.Background = pg.Theme.Color.LightGray
 		} else {
 			pg.seedMenu[k].button.Background = color.NRGBA{}
 		}
 	}
 }
 
-func (pg *createRestore) layoutSeedMenu(gtx layout.Context, optionsSeedMenuIndex int) {
+func (pg *CreateRestore) layoutSeedMenu(gtx layout.Context, optionsSeedMenuIndex int) {
 	if pg.openPopupIndex != optionsSeedMenuIndex || pg.openPopupIndex != pg.seedEditors.focusIndex {
 		return
 	}
@@ -506,7 +506,7 @@ func (pg *createRestore) layoutSeedMenu(gtx layout.Context, optionsSeedMenuIndex
 
 	m := op.Record(gtx.Ops)
 	inset.Layout(gtx, func(gtx C) D {
-		border := widget.Border{Color: pg.theme.Color.LightGray, CornerRadius: values.MarginPadding5, Width: values.MarginPadding2}
+		border := widget.Border{Color: pg.Theme.Color.LightGray, CornerRadius: values.MarginPadding5, Width: values.MarginPadding2}
 		return border.Layout(gtx, func(gtx C) D {
 			return pg.optionsMenuCard.Layout(gtx, func(gtx C) D {
 				gtx.Constraints.Min.X = gtx.Constraints.Max.X
@@ -519,7 +519,7 @@ func (pg *createRestore) layoutSeedMenu(gtx layout.Context, optionsSeedMenuIndex
 	op.Defer(gtx.Ops, m.Stop())
 }
 
-func (pg createRestore) suggestionSeeds(text string) []string {
+func (pg CreateRestore) suggestionSeeds(text string) []string {
 	var seeds []string
 	if text == "" {
 		return seeds
@@ -535,7 +535,7 @@ func (pg createRestore) suggestionSeeds(text string) []string {
 	return seeds
 }
 
-func (pg *createRestore) validateWalletName() string {
+func (pg *CreateRestore) validateWalletName() string {
 	name := pg.walletName.Editor.Text()
 	if name == "" {
 		pg.errLabel.Text = "wallet name required and cannot be empty"
@@ -544,10 +544,10 @@ func (pg *createRestore) validateWalletName() string {
 	return name
 }
 
-func (pg *createRestore) validatePassword() string {
+func (pg *CreateRestore) validatePassword() string {
 	pass := pg.spendingPassword.Editor.Text()
 	if pass == "" {
-		pg.spendingPassword.HintColor = pg.theme.Color.Danger
+		pg.spendingPassword.HintColor = pg.Theme.Color.Danger
 		pg.errLabel.Text = "wallet password required and cannot be empty"
 		return ""
 	}
@@ -555,7 +555,7 @@ func (pg *createRestore) validatePassword() string {
 	return pass
 }
 
-func (pg *createRestore) validatePasswords() string {
+func (pg *CreateRestore) validatePasswords() string {
 	pass := pg.validatePassword()
 	if pass == "" {
 		return ""
@@ -563,7 +563,7 @@ func (pg *createRestore) validatePasswords() string {
 
 	match := pg.matchSpendingPassword.Editor.Text()
 	if match == "" {
-		pg.matchSpendingPassword.HintColor = pg.theme.Color.Danger
+		pg.matchSpendingPassword.HintColor = pg.Theme.Color.Danger
 		pg.errLabel.Text = "Enter new wallet password again and it cannot be empty"
 		return ""
 	}
@@ -580,18 +580,18 @@ func (pg *createRestore) validatePasswords() string {
 	return pass
 }
 
-func (pg *createRestore) resetPasswords() {
+func (pg *CreateRestore) resetPasswords() {
 	pg.spendingPassword.Editor.SetText("")
 	pg.matchSpendingPassword.Editor.SetText("")
 }
 
-func (pg *createRestore) validateSeeds() bool {
+func (pg *CreateRestore) validateSeeds() bool {
 	pg.seedPhrase = ""
 	pg.errLabel.Text = ""
 
 	for i, editor := range pg.seedEditors.editors {
 		if editor.Edit.Editor.Text() == "" {
-			pg.seedEditors.editors[i].Edit.HintColor = pg.theme.Color.Danger
+			pg.seedEditors.editors[i].Edit.HintColor = pg.Theme.Color.Danger
 			pg.errLabel.Text = "All seed fields are required"
 			return false
 		}
@@ -607,17 +607,15 @@ func (pg *createRestore) validateSeeds() bool {
 	return true
 }
 
-func (pg *createRestore) resetSeeds() {
+func (pg *CreateRestore) resetSeeds() {
 	for i := 0; i < len(pg.seedEditors.editors); i++ {
 		pg.seedEditors.editors[i].Edit.Editor.SetText("")
 	}
 }
 
-func (pg *createRestore) handle() {
-	common := pg.common
-
+func (pg *CreateRestore) Handle() {
 	for pg.closePageBtn.Button.Clicked() {
-		common.popWindowPage()
+		pg.PopWindowPage()
 	}
 
 	if pg.restoreWalletBtn.Button.Clicked() {
@@ -629,7 +627,7 @@ func (pg *createRestore) handle() {
 
 		go func() {
 			pg.restoringWallet = true
-			_, err := pg.common.multiWallet.RestoreWallet(walletName, pg.seedPhrase, pass, dcrlibwallet.PassphraseTypePass)
+			_, err := pg.WL.MultiWallet.RestoreWallet(walletName, pg.seedPhrase, pass, dcrlibwallet.PassphraseTypePass)
 			pg.restoringWallet = false
 			if err != nil {
 				pg.errLabel.Text = translateErr(err)
@@ -641,17 +639,18 @@ func (pg *createRestore) handle() {
 
 			// Go back to wallets page if there's more than one wallet
 			// or launch main page.
-			if pg.common.multiWallet.LoadedWalletsCount() > 1 {
-				pg.common.popWindowPage()
+			if pg.WL.MultiWallet.LoadedWalletsCount() > 1 {
+				pg.PopWindowPage()
 			} else {
-				pg.common.wallet.SetupListeners()
-				pg.common.changeWindowPage(newMainPage(pg.common), false)
+				pg.WL.Wallet.SetupListeners()
+				// todo: uncomment when main page has been moved to the page package
+				// pg.ChangeWindowPage(newMainPage(pg.common, nil), false)
 			}
 		}()
 	}
 
 	if pg.matchSpendingPassword.Editor.Len() > 0 && pg.spendingPassword.Editor.Len() > 0 {
-		pg.restoreWalletBtn.Background = pg.theme.Color.Primary
+		pg.restoreWalletBtn.Background = pg.Theme.Color.Primary
 	}
 
 	for pg.resetSeedFields.Button.Clicked() {
@@ -691,10 +690,10 @@ func (pg *createRestore) handle() {
 	default:
 	}
 
-	computePasswordStrength(&pg.passwordStrength, common.theme, pg.spendingPassword.Editor)
+	computePasswordStrength(&pg.passwordStrength, pg.Theme, pg.spendingPassword.Editor)
 	pg.editorSeedsEventsHandler()
 	pg.onSuggestionSeedsClicked()
 	pg.suggestionSeedEffect()
 }
 
-func (pg *createRestore) onClose() {}
+func (pg *CreateRestore) OnClose() {}

@@ -1,8 +1,10 @@
-package ui
+package page
 
 import (
 	"fmt"
 	"strconv"
+
+	"github.com/planetdecred/godcr/ui/modal"
 
 	"gioui.org/layout"
 	"gioui.org/widget"
@@ -10,13 +12,14 @@ import (
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/planetdecred/dcrlibwallet"
 	"github.com/planetdecred/godcr/ui/decredmaterial"
+	"github.com/planetdecred/godcr/ui/load"
 	"github.com/planetdecred/godcr/ui/values"
 )
 
-const PageAccountDetails = "AccountDetails"
+const AccountDetailsPageID = "AccountDetails"
 
-type acctDetailsPage struct {
-	common  *pageCommon
+type AcctDetailsPage struct {
+	*load.Load
 	wallet  *dcrlibwallet.Wallet
 	account *dcrlibwallet.Account
 
@@ -36,26 +39,26 @@ type acctDetailsPage struct {
 	keys             string
 }
 
-func AcctDetailsPage(common *pageCommon, account *dcrlibwallet.Account) Page {
-	pg := &acctDetailsPage{
-		common:  common,
-		wallet:  common.multiWallet.WalletWithID(account.WalletID),
+func NewAcctDetailsPage(l *load.Load, account *dcrlibwallet.Account) *AcctDetailsPage {
+	pg := &AcctDetailsPage{
+		Load:    l,
+		wallet:  l.WL.MultiWallet.WalletWithID(account.WalletID),
 		account: account,
 
-		theme: common.theme,
+		theme: l.Theme,
 		acctDetailsPageContainer: layout.List{
 			Axis: layout.Vertical,
 		},
-		backButton:  common.theme.PlainIconButton(new(widget.Clickable), common.icons.navigationArrowBack),
+		backButton:  l.Theme.PlainIconButton(new(widget.Clickable), l.Icons.NavigationArrowBack),
 		editAccount: new(widget.Clickable),
 	}
 
-	pg.backButton, _ = common.SubPageHeaderButtons()
+	pg.backButton, _ = subpageHeaderButtons(l)
 
 	return pg
 }
 
-func (pg *acctDetailsPage) OnResume() {
+func (pg *AcctDetailsPage) OnResume() {
 
 	balance := pg.account.Balance
 
@@ -69,7 +72,7 @@ func (pg *acctDetailsPage) OnResume() {
 	pg.votingAuthority = dcrutil.Amount(balance.VotingAuthority).String()
 	pg.immatureStakeGen = dcrutil.Amount(balance.ImmatureStakeGeneration).String()
 
-	pg.hdPath = pg.common.HDPrefix() + strconv.Itoa(int(pg.account.Number)) + "'"
+	pg.hdPath = pg.WL.HDPrefix() + strconv.Itoa(int(pg.account.Number)) + "'"
 
 	ext := pg.account.ExternalKeyCount
 	internal := pg.account.InternalKeyCount
@@ -77,12 +80,10 @@ func (pg *acctDetailsPage) OnResume() {
 	pg.keys = fmt.Sprintf("%d external, %d internal, %d imported", ext, internal, imp)
 }
 
-func (pg *acctDetailsPage) Layout(gtx layout.Context) layout.Dimensions {
-	common := pg.common
-
+func (pg *AcctDetailsPage) Layout(gtx layout.Context) layout.Dimensions {
 	widgets := []func(gtx C) D{
 		func(gtx C) D {
-			return pg.accountBalanceLayout(gtx, common)
+			return pg.accountBalanceLayout(gtx)
 		},
 		func(gtx C) D {
 			m := values.MarginPadding10
@@ -96,12 +97,13 @@ func (pg *acctDetailsPage) Layout(gtx layout.Context) layout.Dimensions {
 	}
 
 	body := func(gtx C) D {
-		page := SubPage{
+		sp := SubPage{
+			Load:       pg.Load,
 			title:      pg.account.Name,
 			walletName: pg.wallet.Name,
 			backButton: pg.backButton,
 			back: func() {
-				common.changePage(PageWallet)
+				pg.ChangePage(WalletPageID)
 			},
 			body: func(gtx C) D {
 				return layout.Inset{Bottom: values.MarginPadding7}.Layout(gtx, func(gtx C) D {
@@ -117,23 +119,23 @@ func (pg *acctDetailsPage) Layout(gtx layout.Context) layout.Dimensions {
 			extraItem: pg.editAccount,
 			extra: func(gtx C) D {
 				return layout.Inset{}.Layout(gtx, func(gtx C) D {
-					edit := common.icons.editIcon
+					edit := pg.Icons.EditIcon
 					edit.Scale = 1
 					return layout.E.Layout(gtx, edit.Layout)
 				})
 			},
 		}
-		return common.SubPageLayout(gtx, page)
+		return sp.Layout(gtx)
 	}
-	return pg.common.UniformPadding(gtx, body)
+	return uniformPadding(gtx, body)
 }
 
-func (pg *acctDetailsPage) accountBalanceLayout(gtx layout.Context, common *pageCommon) layout.Dimensions {
+func (pg *AcctDetailsPage) accountBalanceLayout(gtx layout.Context) layout.Dimensions {
 
 	return pg.pageSections(gtx, func(gtx C) D {
-		accountIcon := common.icons.accountIcon
+		accountIcon := pg.Icons.AccountIcon
 		if pg.account.Number == MaxInt32 {
-			accountIcon = common.icons.importedAccountIcon
+			accountIcon = pg.Icons.ImportedAccountIcon
 		}
 		accountIcon.Scale = 1
 
@@ -179,9 +181,9 @@ func (pg *acctDetailsPage) accountBalanceLayout(gtx layout.Context, common *page
 	})
 }
 
-func (pg *acctDetailsPage) acctBalLayout(gtx layout.Context, balType string, balance string, isTotalBalance bool) layout.Dimensions {
+func (pg *AcctDetailsPage) acctBalLayout(gtx layout.Context, balType string, balance string, isTotalBalance bool) layout.Dimensions {
 
-	mainBalance, subBalance := breakBalance(pg.common.printer, balance)
+	mainBalance, subBalance := breakBalance(pg.Printer, balance)
 
 	mainLabel := pg.theme.Body1(mainBalance)
 	subLabel := pg.theme.Caption(subBalance)
@@ -216,7 +218,7 @@ func (pg *acctDetailsPage) acctBalLayout(gtx layout.Context, balType string, bal
 	})
 }
 
-func (pg *acctDetailsPage) accountInfoLayout(gtx layout.Context) layout.Dimensions {
+func (pg *AcctDetailsPage) accountInfoLayout(gtx layout.Context) layout.Dimensions {
 	return pg.pageSections(gtx, func(gtx C) D {
 		m := values.MarginPadding10
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -244,7 +246,7 @@ func (pg *acctDetailsPage) accountInfoLayout(gtx layout.Context) layout.Dimensio
 	})
 }
 
-func (pg *acctDetailsPage) acctInfoLayout(gtx layout.Context, leftText, rightText string) layout.Dimensions {
+func (pg *AcctDetailsPage) acctInfoLayout(gtx layout.Context, leftText, rightText string) layout.Dimensions {
 	return layout.Flex{}.Layout(gtx,
 		layout.Rigid(func(gtx C) D {
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
@@ -261,23 +263,21 @@ func (pg *acctDetailsPage) acctInfoLayout(gtx layout.Context, leftText, rightTex
 	)
 }
 
-func (pg *acctDetailsPage) pageSections(gtx layout.Context, body layout.Widget) layout.Dimensions {
+func (pg *AcctDetailsPage) pageSections(gtx layout.Context, body layout.Widget) layout.Dimensions {
 	m := values.MarginPadding20
 	mtb := values.MarginPadding5
 	return layout.Inset{Left: m, Right: m, Top: mtb, Bottom: mtb}.Layout(gtx, body)
 }
 
-func (pg *acctDetailsPage) handle() {
-	common := pg.common
-
+func (pg *AcctDetailsPage) Handle() {
 	if pg.editAccount.Clicked() {
-		textModal := newTextInputModal(common).
-			hint("Account name").
-			positiveButton(values.String(values.StrRename), func(newName string, tim *textInputModal) bool {
+		textModal := modal.NewTextInputModal(pg.Load).
+			Hint("Account name").
+			PositiveButton(values.String(values.StrRename), func(newName string, tim *modal.TextInputModal) bool {
 				err := pg.wallet.RenameAccount(pg.account.Number, newName)
 				if err != nil {
-					tim.setError(err.Error())
-					tim.isLoading = false
+					tim.SetError(err.Error())
+					tim.IsLoading = false
 					return false
 				}
 
@@ -285,10 +285,10 @@ func (pg *acctDetailsPage) handle() {
 				return true
 			})
 
-		textModal.title("Rename account").
-			negativeButton(values.String(values.StrCancel), func() {})
+		textModal.Title("Rename account").
+			NegativeButton(values.String(values.StrCancel), func() {})
 		textModal.Show()
 	}
 }
 
-func (pg *acctDetailsPage) onClose() {}
+func (pg *AcctDetailsPage) OnClose() {}

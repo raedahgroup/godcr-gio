@@ -317,7 +317,7 @@ func (pg *ticketPageList) initTicketTooltips(common pageCommon) {
 	}
 }
 
-func (pg *ticketPageList) handle() {
+func (pg *ticketPageList) Handle() {
 
 	if pg.toggleViewType.Clicked() {
 		pg.isGridView = !pg.isGridView
@@ -341,4 +341,4 @@ func (pg *ticketPageList) handle() {
 	}
 }
 
-func (pg *ticketPageList) onClose() {}
+func (pg *ticketPageList) OnClose() {}

@@ -1,7 +1,11 @@
-package ui
+package page
 
 import (
 	"image"
+
+	"github.com/planetdecred/godcr/ui/modal"
+
+	"github.com/planetdecred/godcr/ui/load"
 
 	"gioui.org/layout"
 	"gioui.org/widget"
@@ -10,80 +14,78 @@ import (
 	"github.com/planetdecred/godcr/ui/decredmaterial"
 )
 
-const PageSecurityTools = "SecurityTools"
+const SecurityToolsPageID = "SecurityTools"
 
-type securityToolsPage struct {
-	theme           *decredmaterial.Theme
+type SecurityToolsPage struct {
+	*load.Load
 	verifyMessage   *widget.Clickable
 	validateAddress *widget.Clickable
-	common          *pageCommon
 
 	backButton decredmaterial.IconButton
 	infoButton decredmaterial.IconButton
 }
 
-func SecurityToolsPage(common *pageCommon) Page {
-	pg := &securityToolsPage{
-		theme:           common.theme,
+func NewSecurityToolsPage(l *load.Load) *SecurityToolsPage {
+	pg := &SecurityToolsPage{
+		Load:            l,
 		verifyMessage:   new(widget.Clickable),
 		validateAddress: new(widget.Clickable),
-		common:          common,
 	}
 
-	pg.backButton, pg.infoButton = common.SubPageHeaderButtons()
+	pg.backButton, pg.infoButton = subpageHeaderButtons(l)
 
 	return pg
 }
 
-func (pg *securityToolsPage) OnResume() {
+func (pg *SecurityToolsPage) OnResume() {
 
 }
 
 // main settings layout
-func (pg *securityToolsPage) Layout(gtx layout.Context) layout.Dimensions {
-	common := pg.common
+func (pg *SecurityToolsPage) Layout(gtx layout.Context) layout.Dimensions {
 	body := func(gtx C) D {
-		page := SubPage{
+		sp := SubPage{
+			Load:       pg.Load,
 			title:      "Security Tools",
 			backButton: pg.backButton,
 			infoButton: pg.infoButton,
 			back: func() {
-				*common.page = PageMore
+				pg.ChangePage(MorePageID)
 			},
 			body: func(gtx C) D {
 				return layout.Inset{Top: values.MarginPadding5}.Layout(gtx, func(gtx C) D {
 					return layout.Flex{Spacing: layout.SpaceBetween}.Layout(gtx,
-						layout.Flexed(.5, pg.message(common)),
+						layout.Flexed(.5, pg.message()),
 						layout.Rigid(func(gtx C) D {
 							size := image.Point{X: 15, Y: gtx.Constraints.Min.Y}
 							return layout.Dimensions{Size: size}
 						}),
-						layout.Flexed(.5, pg.address(common)),
+						layout.Flexed(.5, pg.address()),
 					)
 				})
 			},
-			infoTemplate: SecurityToolsInfoTemplate,
+			infoTemplate: modal.SecurityToolsInfoTemplate,
 		}
-		return common.SubPageLayout(gtx, page)
+		return sp.Layout(gtx)
 	}
-	return common.UniformPadding(gtx, body)
+	return uniformPadding(gtx, body)
 }
 
-func (pg *securityToolsPage) message(common *pageCommon) layout.Widget {
+func (pg *SecurityToolsPage) message() layout.Widget {
 	return func(gtx C) D {
-		return pg.pageSections(gtx, common.icons.verifyMessageIcon, pg.verifyMessage, common.theme.Body1("Verify Message").Layout)
+		return pg.pageSections(gtx, pg.Icons.VerifyMessageIcon, pg.verifyMessage, pg.Theme.Body1("Verify Message").Layout)
 	}
 }
 
-func (pg *securityToolsPage) address(common *pageCommon) layout.Widget {
+func (pg *SecurityToolsPage) address() layout.Widget {
 	return func(gtx C) D {
-		return pg.pageSections(gtx, common.icons.locationPinIcon, pg.validateAddress, common.theme.Body1("Validate Address").Layout)
+		return pg.pageSections(gtx, pg.Icons.LocationPinIcon, pg.validateAddress, pg.Theme.Body1("Validate Address").Layout)
 	}
 }
 
-func (pg *securityToolsPage) pageSections(gtx layout.Context, icon *widget.Image, action *widget.Clickable, body layout.Widget) layout.Dimensions {
+func (pg *SecurityToolsPage) pageSections(gtx layout.Context, icon *widget.Image, action *widget.Clickable, body layout.Widget) layout.Dimensions {
 	return layout.Inset{Bottom: values.MarginPadding10}.Layout(gtx, func(gtx C) D {
-		return pg.theme.Card().Layout(gtx, func(gtx C) D {
+		return pg.Theme.Card().Layout(gtx, func(gtx C) D {
 			return decredmaterial.Clickable(gtx, action, func(gtx C) D {
 				return layout.UniformInset(values.MarginPadding15).Layout(gtx, func(gtx C) D {
 					return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle, Spacing: layout.SpaceAround}.Layout(gtx,
@@ -104,19 +106,16 @@ func (pg *securityToolsPage) pageSections(gtx layout.Context, icon *widget.Image
 	})
 }
 
-func (pg *securityToolsPage) handle() {
-	common := pg.common
+func (pg *SecurityToolsPage) Handle() {
 	if pg.verifyMessage.Clicked() {
-		*common.returnPage = PageSecurityTools
-		common.setReturnPage(PageSecurityTools)
-		common.changePage(PageVerifyMessage)
+		pg.SetReturnPage(SecurityToolsPageID)
+		pg.ChangePage(VerifyMessagePageID)
 	}
 
 	if pg.validateAddress.Clicked() {
-		*common.returnPage = PageSecurityTools
-		common.setReturnPage(PageSecurityTools)
-		common.changePage(ValidateAddress)
+		pg.SetReturnPage(SecurityToolsPageID)
+		pg.ChangePage(ValidateAddressPageID)
 	}
 }
 
-func (pg *securityToolsPage) onClose() {}
+func (pg *SecurityToolsPage) OnClose() {}

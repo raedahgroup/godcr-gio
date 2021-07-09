@@ -1,17 +1,18 @@
-package ui
+package page
 
 import (
 	"gioui.org/layout"
 	"gioui.org/widget"
-
 	"github.com/planetdecred/dcrlibwallet"
 	"github.com/planetdecred/godcr/ui/decredmaterial"
+	"github.com/planetdecred/godcr/ui/load"
+	"github.com/planetdecred/godcr/ui/modal"
 	"github.com/planetdecred/godcr/ui/preference"
 	"github.com/planetdecred/godcr/ui/values"
 	"github.com/planetdecred/godcr/wallet"
 )
 
-const PageSettings = "Settings"
+const SettingsPageID = "Settings"
 
 const (
 	USDExchangeValue     = "usd_bittrex"
@@ -27,8 +28,8 @@ type row struct {
 	label     decredmaterial.Label
 }
 
-type settingsPage struct {
-	common        *pageCommon
+type SettingsPage struct {
+	*load.Load
 	pageContainer layout.List
 	theme         *decredmaterial.Theme
 	walletInfo    *wallet.MultiWalletInfo
@@ -60,17 +61,17 @@ type settingsPage struct {
 	languagePreference *preference.ListPreference
 }
 
-func SettingsPage(common *pageCommon) Page {
-	chevronRightIcon := common.icons.chevronRight
+func NewSettingsPage(l *load.Load) *SettingsPage {
+	chevronRightIcon := l.Icons.ChevronRight
 
-	pg := &settingsPage{
+	pg := &SettingsPage{
+		Load: l,
 		pageContainer: layout.List{
 			Axis: layout.Vertical,
 		},
-		theme:      common.theme,
-		walletInfo: common.info,
-		wal:        common.wallet,
-		common:     common,
+		theme:      l.Theme,
+		walletInfo: l.WL.Info,
+		wal:        l.WL.Wallet,
 
 		isDarkModeOn:     new(widget.Bool),
 		spendUnconfirmed: new(widget.Bool),
@@ -86,13 +87,13 @@ func SettingsPage(common *pageCommon) Page {
 		updateUserAgent:     new(widget.Clickable),
 		changeStartupPass:   new(widget.Clickable),
 
-		confirm: common.theme.Button(new(widget.Clickable), "Ok"),
-		cancel:  common.theme.Button(new(widget.Clickable), values.String(values.StrCancel)),
+		confirm: l.Theme.Button(new(widget.Clickable), "Ok"),
+		cancel:  l.Theme.Button(new(widget.Clickable), values.String(values.StrCancel)),
 	}
 
-	pg.backButton, _ = common.SubPageHeaderButtons()
+	pg.backButton, _ = subpageHeaderButtons(l)
 
-	languagePreference := preference.NewListPreference(common.wallet, common.theme, languagePreferenceKey,
+	languagePreference := preference.NewListPreference(pg.WL.Wallet, pg.Theme, languagePreferenceKey,
 		values.DefaultLangauge, values.ArrLanguages).
 		Title(values.StrLanguage).
 		PostiveButton(values.StrConfirm, func() {
@@ -105,40 +106,40 @@ func SettingsPage(common *pageCommon) Page {
 	currencyMap[DefaultExchangeValue] = values.StrNone
 	currencyMap[USDExchangeValue] = values.StrUsdBittrex
 
-	currencyPreference := preference.NewListPreference(common.wallet, common.theme,
+	currencyPreference := preference.NewListPreference(pg.WL.Wallet, pg.Theme,
 		dcrlibwallet.CurrencyConversionConfigKey, DefaultExchangeValue, currencyMap).
 		Title(values.StrCurrencyConversion).
 		PostiveButton(values.StrConfirm, func() {}).
 		NegativeButton(values.StrCancel, func() {})
 	pg.currencyPreference = currencyPreference
 
-	color := common.theme.Color.LightGray
+	color := pg.Theme.Color.LightGray
 
-	pg.peerLabel = common.theme.Body1("")
-	pg.peerLabel.Color = common.theme.Color.Gray
+	pg.peerLabel = pg.Theme.Body1("")
+	pg.peerLabel.Color = pg.Theme.Color.Gray
 
-	pg.agentLabel = common.theme.Body1("")
-	pg.agentLabel.Color = common.theme.Color.Gray
+	pg.agentLabel = pg.Theme.Body1("")
+	pg.agentLabel.Color = pg.Theme.Color.Gray
 
 	pg.chevronRightIcon.Color = color
 
 	return pg
 }
 
-func (pg *settingsPage) OnResume() {
+func (pg *SettingsPage) OnResume() {
 
 }
 
-func (pg *settingsPage) Layout(gtx layout.Context) layout.Dimensions {
-	common := pg.common
+func (pg *SettingsPage) Layout(gtx layout.Context) layout.Dimensions {
 	pg.updateSettingOptions()
 
 	body := func(gtx C) D {
-		page := SubPage{
+		sp := SubPage{
+			Load:       pg.Load,
 			title:      values.String(values.StrSettings),
 			backButton: pg.backButton,
 			back: func() {
-				common.changePage(PageMore)
+				pg.ChangePage(MorePageID)
 			},
 			body: func(gtx layout.Context) layout.Dimensions {
 				pageContent := []func(gtx C) D{
@@ -153,21 +154,21 @@ func (pg *settingsPage) Layout(gtx layout.Context) layout.Dimensions {
 				})
 			},
 		}
-		return common.SubPageLayout(gtx, page)
+		return sp.Layout(gtx)
 	}
 
 	if pg.currencyPreference.IsShowing {
-		return pg.currencyPreference.Layout(gtx, common.UniformPadding(gtx, body))
+		return pg.currencyPreference.Layout(gtx, uniformPadding(gtx, body))
 	}
 
 	if pg.languagePreference.IsShowing {
-		return pg.languagePreference.Layout(gtx, common.UniformPadding(gtx, body))
+		return pg.languagePreference.Layout(gtx, uniformPadding(gtx, body))
 	}
 
-	return common.UniformPadding(gtx, body)
+	return uniformPadding(gtx, body)
 }
 
-func (pg *settingsPage) general() layout.Widget {
+func (pg *SettingsPage) general() layout.Widget {
 	return func(gtx C) D {
 		return pg.mainSection(gtx, values.String(values.StrGeneral), func(gtx C) D {
 			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -202,7 +203,7 @@ func (pg *settingsPage) general() layout.Widget {
 	}
 }
 
-func (pg *settingsPage) notification() layout.Widget {
+func (pg *SettingsPage) notification() layout.Widget {
 	return func(gtx C) D {
 		return pg.mainSection(gtx, values.String(values.StrNotifications), func(gtx C) D {
 			return pg.subSectionSwitch(gtx, values.String(values.StrBeepForNewBlocks), pg.beepNewBlocks)
@@ -210,7 +211,7 @@ func (pg *settingsPage) notification() layout.Widget {
 	}
 }
 
-func (pg *settingsPage) security() layout.Widget {
+func (pg *SettingsPage) security() layout.Widget {
 	return func(gtx C) D {
 		return pg.mainSection(gtx, values.String(values.StrSecurity), func(gtx C) D {
 			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -233,7 +234,7 @@ func (pg *settingsPage) security() layout.Widget {
 	}
 }
 
-func (pg *settingsPage) connection() layout.Widget {
+func (pg *SettingsPage) connection() layout.Widget {
 	return func(gtx C) D {
 		return pg.mainSection(gtx, values.String(values.StrConnection), func(gtx C) D {
 			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -258,7 +259,7 @@ func (pg *settingsPage) connection() layout.Widget {
 	}
 }
 
-func (pg *settingsPage) agent() layout.Widget {
+func (pg *SettingsPage) agent() layout.Widget {
 	return func(gtx C) D {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx C) D {
@@ -300,7 +301,7 @@ func (pg *settingsPage) agent() layout.Widget {
 	}
 }
 
-func (pg *settingsPage) mainSection(gtx layout.Context, title string, body layout.Widget) layout.Dimensions {
+func (pg *SettingsPage) mainSection(gtx layout.Context, title string, body layout.Widget) layout.Dimensions {
 	return layout.Inset{Bottom: values.MarginPadding10}.Layout(gtx, func(gtx C) D {
 		return pg.theme.Card().Layout(gtx, func(gtx C) D {
 			m15 := values.MarginPadding15
@@ -318,7 +319,7 @@ func (pg *settingsPage) mainSection(gtx layout.Context, title string, body layou
 	})
 }
 
-func (pg *settingsPage) subSection(gtx layout.Context, title string, body layout.Widget) layout.Dimensions {
+func (pg *SettingsPage) subSection(gtx layout.Context, title string, body layout.Widget) layout.Dimensions {
 	return layout.Inset{Top: values.MarginPadding5, Bottom: values.MarginPadding15}.Layout(gtx, func(gtx C) D {
 		return layout.Flex{}.Layout(gtx,
 			layout.Rigid(pg.subSectionLabel(title)),
@@ -329,11 +330,11 @@ func (pg *settingsPage) subSection(gtx layout.Context, title string, body layout
 	})
 }
 
-func (pg *settingsPage) subSectionSwitch(gtx layout.Context, title string, option *widget.Bool) layout.Dimensions {
+func (pg *SettingsPage) subSectionSwitch(gtx layout.Context, title string, option *widget.Bool) layout.Dimensions {
 	return pg.subSection(gtx, title, pg.theme.Switch(option).Layout)
 }
 
-func (pg *settingsPage) clickableRow(gtx layout.Context, row row) layout.Dimensions {
+func (pg *SettingsPage) clickableRow(gtx layout.Context, row row) layout.Dimensions {
 	return decredmaterial.Clickable(gtx, row.clickable, func(gtx C) D {
 		return layout.Inset{Top: values.MarginPadding5, Bottom: values.MarginPaddingMinus5}.Layout(gtx, func(gtx C) D {
 			return pg.subSection(gtx, row.title, func(gtx C) D {
@@ -348,7 +349,7 @@ func (pg *settingsPage) clickableRow(gtx layout.Context, row row) layout.Dimensi
 	})
 }
 
-func (pg *settingsPage) conditionalDisplay(gtx layout.Context, display bool, body layout.Widget) layout.Dimensions {
+func (pg *SettingsPage) conditionalDisplay(gtx layout.Context, display bool, body layout.Widget) layout.Dimensions {
 	if display {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(pg.lineSeparator()),
@@ -358,27 +359,26 @@ func (pg *settingsPage) conditionalDisplay(gtx layout.Context, display bool, bod
 	return layout.Dimensions{}
 }
 
-func (pg *settingsPage) subSectionLabel(title string) layout.Widget {
+func (pg *SettingsPage) subSectionLabel(title string) layout.Widget {
 	return func(gtx C) D {
 		return pg.theme.Body1(title).Layout(gtx)
 	}
 }
 
-func (pg *settingsPage) lineSeparator() layout.Widget {
+func (pg *SettingsPage) lineSeparator() layout.Widget {
 	m := values.MarginPadding1
 	return func(gtx C) D {
 		return layout.Inset{Top: m, Bottom: m}.Layout(gtx, pg.theme.Separator().Layout)
 	}
 }
 
-func (pg *settingsPage) handle() {
-	common := pg.common
+func (pg *SettingsPage) Handle() {
 	pg.languagePreference.Handle()
 	pg.currencyPreference.Handle()
 
 	if pg.isDarkModeOn.Changed() {
 		pg.wal.SaveConfigValueForKey("isDarkModeOn", pg.isDarkModeOn.Value)
-		common.refreshTheme()
+		pg.RefreshTheme()
 	}
 
 	if pg.spendUnconfirmed.Changed() {
@@ -391,32 +391,32 @@ func (pg *settingsPage) handle() {
 
 	for pg.changeStartupPass.Clicked() {
 
-		newPasswordModal(common).
-			title(values.String(values.StrConfirmRemoveStartupPass)).
-			hint("Current startup password").
-			negativeButton(values.String(values.StrCancel), func() {}).
-			positiveButton(values.String(values.StrConfirm), func(password string, pm *passwordModal) bool {
+		modal.NewPasswordModal(pg.Load).
+			Title(values.String(values.StrConfirmRemoveStartupPass)).
+			Hint("Current startup password").
+			NegativeButton(values.String(values.StrCancel), func() {}).
+			PositiveButton(values.String(values.StrConfirm), func(password string, pm *modal.PasswordModal) bool {
 				go func() {
 					err := pg.wal.GetMultiWallet().VerifyStartupPassphrase([]byte(password))
 					if err != nil {
-						pm.setError(err.Error())
-						pm.setLoading(false)
+						pm.SetError(err.Error())
+						pm.SetLoading(false)
 						return
 					}
 					pm.Dismiss()
 
 					// change password
-					newCreatePasswordModal(common).
-						title(values.String(values.StrCreateStartupPassword)).
-						enableName(false).
-						passwordHint("New startup password").
-						confirmPasswordHint("Confirm new startup password").
-						passwordCreated(func(walletName, newPassword string, m *createPasswordModal) bool {
+					modal.NewCreatePasswordModal(pg.Load).
+						Title(values.String(values.StrCreateStartupPassword)).
+						EnableName(false).
+						PasswordHint("New startup password").
+						ConfirmPasswordHint("Confirm new startup password").
+						PasswordCreated(func(walletName, newPassword string, m *modal.CreatePasswordModal) bool {
 							go func() {
 								err := pg.wal.GetMultiWallet().ChangeStartupPassphrase([]byte(password), []byte(newPassword), dcrlibwallet.PassphraseTypePass)
 								if err != nil {
-									m.setError(err.Error())
-									m.setLoading(false)
+									m.SetError(err.Error())
+									m.SetLoading(false)
 									return
 								}
 								m.Dismiss()
@@ -433,17 +433,17 @@ func (pg *settingsPage) handle() {
 
 	if pg.startupPassword.Changed() {
 		if pg.startupPassword.Value {
-			newCreatePasswordModal(common).
-				title(values.String(values.StrCreateStartupPassword)).
-				enableName(false).
-				passwordHint("Startup password").
-				confirmPasswordHint("Confirm startup password").
-				passwordCreated(func(walletName, password string, m *createPasswordModal) bool {
+			modal.NewCreatePasswordModal(pg.Load).
+				Title(values.String(values.StrCreateStartupPassword)).
+				EnableName(false).
+				PasswordHint("Startup password").
+				ConfirmPasswordHint("Confirm startup password").
+				PasswordCreated(func(walletName, password string, m *modal.CreatePasswordModal) bool {
 					go func() {
 						err := pg.wal.GetMultiWallet().SetStartupPassphrase([]byte(password), dcrlibwallet.PassphraseTypePass)
 						if err != nil {
-							m.setError(err.Error())
-							m.setLoading(false)
+							m.SetError(err.Error())
+							m.SetLoading(false)
 							return
 						}
 						m.Dismiss()
@@ -452,16 +452,16 @@ func (pg *settingsPage) handle() {
 				}).Show()
 		} else {
 
-			newPasswordModal(common).
-				title(values.String(values.StrConfirmRemoveStartupPass)).
-				hint("Startup password").
-				negativeButton(values.String(values.StrCancel), func() {}).
-				positiveButton(values.String(values.StrConfirm), func(password string, pm *passwordModal) bool {
+			modal.NewPasswordModal(pg.Load).
+				Title(values.String(values.StrConfirmRemoveStartupPass)).
+				Hint("Startup password").
+				NegativeButton(values.String(values.StrCancel), func() {}).
+				PositiveButton(values.String(values.StrConfirm), func(password string, pm *modal.PasswordModal) bool {
 					go func() {
 						err := pg.wal.GetMultiWallet().RemoveStartupPassphrase([]byte(password))
 						if err != nil {
-							pm.setError(err.Error())
-							pm.setLoading(false)
+							pm.SetError(err.Error())
+							pm.SetLoading(false)
 							return
 						}
 						pm.Dismiss()
@@ -504,45 +504,45 @@ func (pg *settingsPage) handle() {
 	case err := <-pg.errorReceiver:
 		if err.Error() == dcrlibwallet.ErrInvalidPassphrase {
 			e := "Password is incorrect"
-			common.notify(e, false)
+			pg.CreateToast(e, false)
 			return
 		}
-		common.notify(err.Error(), false)
+		pg.CreateToast(err.Error(), false)
 	default:
 	}
 }
 
-func (pg *settingsPage) showSPVPeerDialog() {
-	textModal := newTextInputModal(pg.common).
-		hint("IP address").
-		positiveButton(values.String(values.StrConfirm), func(ipAddress string, tim *textInputModal) bool {
+func (pg *SettingsPage) showSPVPeerDialog() {
+	textModal := modal.NewTextInputModal(pg.Load).
+		Hint("IP address").
+		PositiveButton(values.String(values.StrConfirm), func(ipAddress string, tim *modal.TextInputModal) bool {
 			if ipAddress != "" {
 				pg.wal.SaveConfigValueForKey(dcrlibwallet.SpvPersistentPeerAddressesConfigKey, ipAddress)
 			}
 			return true
 		})
 
-	textModal.title(values.String(values.StrConnectToSpecificPeer)).
-		negativeButton(values.String(values.StrCancel), func() {})
+	textModal.Title(values.String(values.StrConnectToSpecificPeer)).
+		NegativeButton(values.String(values.StrCancel), func() {})
 	textModal.Show()
 }
 
-func (pg *settingsPage) showUserAgentDialog() {
-	textModal := newTextInputModal(pg.common).
-		hint("User agent").
-		positiveButton(values.String(values.StrConfirm), func(userAgent string, tim *textInputModal) bool {
+func (pg *SettingsPage) showUserAgentDialog() {
+	textModal := modal.NewTextInputModal(pg.Load).
+		Hint("User agent").
+		PositiveButton(values.String(values.StrConfirm), func(userAgent string, tim *modal.TextInputModal) bool {
 			if userAgent != "" {
 				pg.wal.SaveConfigValueForKey(dcrlibwallet.UserAgentConfigKey, userAgent)
 			}
 			return true
 		})
 
-	textModal.title(values.String(values.StrChangeUserAgent)).
-		negativeButton(values.String(values.StrCancel), func() {})
+	textModal.Title(values.String(values.StrChangeUserAgent)).
+		NegativeButton(values.String(values.StrCancel), func() {})
 	textModal.Show()
 }
 
-func (pg *settingsPage) updateSettingOptions() {
+func (pg *SettingsPage) updateSettingOptions() {
 	isPassword := pg.wal.IsStartupSecuritySet()
 	pg.startupPassword.Value = false
 	pg.isStartupPassword = false
@@ -584,4 +584,4 @@ func (pg *settingsPage) updateSettingOptions() {
 	}
 }
 
-func (pg *settingsPage) onClose() {}
+func (pg *SettingsPage) OnClose() {}

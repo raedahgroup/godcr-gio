@@ -1,9 +1,12 @@
-package ui
+package page
 
 import (
 	"fmt"
 	"image/color"
 	"strings"
+
+	"github.com/planetdecred/godcr/ui/load"
+	"github.com/planetdecred/godcr/ui/modal"
 
 	"gioui.org/io/clipboard"
 	"gioui.org/layout"
@@ -15,11 +18,11 @@ import (
 	"github.com/planetdecred/godcr/ui/values"
 )
 
-const PageTransactionDetails = "TransactionDetails"
+const TransactionDetailsPageID = "TransactionDetails"
 
-type transactionDetailsPage struct {
+type TransactionDetailsPage struct {
+	*load.Load
 	theme                           *decredmaterial.Theme
-	common                          *pageCommon
 	transactionDetailsPageContainer layout.List
 	transactionInputsContainer      layout.List
 	transactionOutputsContainer     layout.List
@@ -41,8 +44,9 @@ type transactionDetailsPage struct {
 	txDestinationAddress string
 }
 
-func TransactionDetailsPage(common *pageCommon, transaction *dcrlibwallet.Transaction) Page {
-	pg := &transactionDetailsPage{
+func NewTransactionDetailsPage(l *load.Load, transaction *dcrlibwallet.Transaction) *TransactionDetailsPage {
+	pg := &TransactionDetailsPage{
+		Load: l,
 		transactionDetailsPageContainer: layout.List{
 			Axis: layout.Vertical,
 		},
@@ -53,26 +57,25 @@ func TransactionDetailsPage(common *pageCommon, transaction *dcrlibwallet.Transa
 			Axis: layout.Vertical,
 		},
 
-		theme:  common.theme,
-		common: common,
+		theme: l.Theme,
 
-		outputsCollapsible: common.theme.Collapsible(),
-		inputsCollapsible:  common.theme.Collapsible(),
+		outputsCollapsible: l.Theme.Collapsible(),
+		inputsCollapsible:  l.Theme.Collapsible(),
 
 		hashClickable:        new(widget.Clickable),
 		destAddressClickable: new(widget.Clickable),
 		toDcrdata:            new(widget.Clickable),
 
 		transaction: transaction,
-		wallet:      common.multiWallet.WalletWithID(transaction.WalletID),
+		wallet:      l.WL.MultiWallet.WalletWithID(transaction.WalletID),
 	}
 
-	pg.backButton, pg.infoButton = common.SubPageHeaderButtons()
+	pg.backButton, pg.infoButton = subpageHeaderButtons(pg.Load)
 
 	pg.copyTextBtn = make([]decredmaterial.Button, 0)
 
-	pg.dot = common.icons.imageBrightness1
-	pg.dot.Color = common.theme.Color.Gray
+	pg.dot = l.Icons.ImageBrightness1
+	pg.dot.Color = l.Theme.Color.Gray
 
 	// find source account
 	if transaction.Direction == dcrlibwallet.TxDirectionSent ||
@@ -101,27 +104,28 @@ func TransactionDetailsPage(common *pageCommon, transaction *dcrlibwallet.Transa
 	return pg
 }
 
-func (pg *transactionDetailsPage) OnResume() {
+func (pg *TransactionDetailsPage) OnResume() {
 
 }
 
-func (pg *transactionDetailsPage) Layout(gtx layout.Context) layout.Dimensions {
-	common := pg.common
+func (pg *TransactionDetailsPage) Layout(gtx layout.Context) layout.Dimensions {
 	if pg.gtx == nil {
 		pg.gtx = &gtx
 	}
+
 	body := func(gtx C) D {
-		page := SubPage{
+		sp := SubPage{
+			Load:       pg.Load,
 			title:      dcrlibwallet.TransactionDirectionName(pg.transaction.Direction),
 			backButton: pg.backButton,
 			infoButton: pg.infoButton,
 			back: func() {
-				common.changePage(*common.returnPage)
+				pg.ChangePage(*pg.ReturnPage)
 			},
 			body: func(gtx layout.Context) layout.Dimensions {
 				widgets := []func(gtx C) D{
 					func(gtx C) D {
-						return pg.txnBalanceAndStatus(gtx, common)
+						return pg.txnBalanceAndStatus(gtx)
 					},
 					func(gtx C) D {
 						return pg.separator(gtx)
@@ -139,31 +143,31 @@ func (pg *transactionDetailsPage) Layout(gtx layout.Context) layout.Dimensions {
 						return pg.separator(gtx)
 					},
 					func(gtx C) D {
-						return pg.txnOutputs(gtx, common)
+						return pg.txnOutputs(gtx)
 					},
 					func(gtx C) D {
 						return pg.separator(gtx)
 					},
 					func(gtx C) D {
-						return pg.viewTxn(gtx, common)
+						return pg.viewTxn(gtx)
 					},
 				}
-				return common.theme.Card().Layout(gtx, func(gtx C) D {
+				return pg.Theme.Card().Layout(gtx, func(gtx C) D {
 					return pg.transactionDetailsPageContainer.Layout(gtx, len(widgets), func(gtx C, i int) D {
 						return layout.Inset{}.Layout(gtx, widgets[i])
 					})
 				})
 			},
-			infoTemplate: TransactionDetailsInfoTemplate,
+			infoTemplate: modal.TransactionDetailsInfoTemplate,
 		}
-		return common.SubPageLayout(gtx, page)
+		return sp.Layout(gtx)
 	}
 
-	return common.UniformPadding(gtx, body)
+	return uniformPadding(gtx, body)
 }
 
-func (pg *transactionDetailsPage) txnBalanceAndStatus(gtx layout.Context, common *pageCommon) layout.Dimensions {
-	txnWidgets := initTxnWidgets(common, pg.transaction)
+func (pg *TransactionDetailsPage) txnBalanceAndStatus(gtx layout.Context) layout.Dimensions {
+	txnWidgets := initTxnWidgets(pg.Load, pg.transaction)
 	return pg.pageSections(gtx, func(gtx C) D {
 		return layout.Flex{}.Layout(gtx,
 			layout.Rigid(func(gtx C) D {
@@ -178,9 +182,9 @@ func (pg *transactionDetailsPage) txnBalanceAndStatus(gtx layout.Context, common
 						amount := strings.Split(dcrutil.Amount(pg.transaction.Amount).String(), " ")
 						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Baseline}.Layout(gtx,
 							layout.Rigid(func(gtx C) D {
-								return layout.Inset{Right: values.MarginPadding2}.Layout(gtx, common.theme.H4(amount[0]).Layout)
+								return layout.Inset{Right: values.MarginPadding2}.Layout(gtx, pg.Theme.H4(amount[0]).Layout)
 							}),
-							layout.Rigid(common.theme.H6(amount[1]).Layout),
+							layout.Rigid(pg.Theme.H6(amount[1]).Layout),
 						)
 					}),
 					layout.Rigid(func(gtx C) D {
@@ -189,7 +193,7 @@ func (pg *transactionDetailsPage) txnBalanceAndStatus(gtx layout.Context, common
 							Top:    m,
 							Bottom: m,
 						}.Layout(gtx, func(gtx C) D {
-							txnWidgets.time.Color = common.theme.Color.Gray
+							txnWidgets.time.Color = pg.Theme.Color.Gray
 							return txnWidgets.time.Layout(gtx)
 						})
 					}),
@@ -202,12 +206,12 @@ func (pg *transactionDetailsPage) txnBalanceAndStatus(gtx layout.Context, common
 								}.Layout(gtx, txnWidgets.statusIcon.Layout)
 							}),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								txt := common.theme.Body1("")
+								txt := pg.Theme.Body1("")
 								if pg.txConfirmations() > 1 {
 									txt.Text = strings.Title("confirmed")
-									txt.Color = common.theme.Color.Success
+									txt.Color = pg.Theme.Color.Success
 								} else {
-									txt.Color = common.theme.Color.Gray
+									txt.Color = pg.Theme.Color.Gray
 								}
 								return txt.Layout(gtx)
 							}),
@@ -222,8 +226,8 @@ func (pg *transactionDetailsPage) txnBalanceAndStatus(gtx layout.Context, common
 								})
 							}),
 							layout.Rigid(func(gtx C) D {
-								txt := common.theme.Body1(values.StringF(values.StrNConfirmations, pg.txConfirmations()))
-								txt.Color = common.theme.Color.Gray
+								txt := pg.Theme.Body1(values.StringF(values.StrNConfirmations, pg.txConfirmations()))
+								txt.Color = pg.Theme.Color.Gray
 								return txt.Layout(gtx)
 							}),
 						)
@@ -235,16 +239,16 @@ func (pg *transactionDetailsPage) txnBalanceAndStatus(gtx layout.Context, common
 }
 
 //TODO: do this at startup
-func (pg *transactionDetailsPage) txConfirmations() int32 {
+func (pg *TransactionDetailsPage) txConfirmations() int32 {
 	transaction := pg.transaction
 	if transaction.BlockHeight != -1 {
-		return (pg.common.multiWallet.WalletWithID(transaction.WalletID).GetBestBlock() - transaction.BlockHeight) + 1
+		return (pg.WL.MultiWallet.WalletWithID(transaction.WalletID).GetBestBlock() - transaction.BlockHeight) + 1
 	}
 
 	return 0
 }
 
-func (pg *transactionDetailsPage) txnTypeAndID(gtx layout.Context) layout.Dimensions {
+func (pg *TransactionDetailsPage) txnTypeAndID(gtx layout.Context) layout.Dimensions {
 	transaction := pg.transaction
 	return pg.pageSections(gtx, func(gtx C) D {
 		m := values.MarginPadding10
@@ -286,7 +290,7 @@ func (pg *transactionDetailsPage) txnTypeAndID(gtx layout.Context) layout.Dimens
 	})
 }
 
-func (pg *transactionDetailsPage) txnInfoSection(gtx layout.Context, label, value string, showWalletBadge bool, clickable *widget.Clickable) layout.Dimensions {
+func (pg *TransactionDetailsPage) txnInfoSection(gtx layout.Context, label, value string, showWalletBadge bool, clickable *widget.Clickable) layout.Dimensions {
 	gtx.Constraints.Min.X = gtx.Constraints.Max.X
 	return layout.Flex{Spacing: layout.SpaceBetween}.Layout(gtx,
 		layout.Rigid(func(gtx C) D {
@@ -335,7 +339,7 @@ func (pg *transactionDetailsPage) txnInfoSection(gtx layout.Context, label, valu
 	)
 }
 
-func (pg *transactionDetailsPage) txnInputs(gtx layout.Context) layout.Dimensions {
+func (pg *TransactionDetailsPage) txnInputs(gtx layout.Context) layout.Dimensions {
 	transaction := pg.transaction
 	x := len(transaction.Inputs) + len(transaction.Outputs)
 	for i := 0; i < x; i++ {
@@ -359,12 +363,12 @@ func (pg *transactionDetailsPage) txnInputs(gtx layout.Context) layout.Dimension
 	})
 }
 
-func (pg *transactionDetailsPage) txnOutputs(gtx layout.Context, common *pageCommon) layout.Dimensions {
+func (pg *TransactionDetailsPage) txnOutputs(gtx layout.Context) layout.Dimensions {
 	transaction := pg.transaction
 
 	collapsibleHeader := func(gtx C) D {
-		t := common.theme.Body1(values.StringF(values.StrXOutputCreated, len(transaction.Outputs)))
-		t.Color = common.theme.Color.Gray
+		t := pg.Theme.Body1(values.StringF(values.StrXOutputCreated, len(transaction.Outputs)))
+		t.Color = pg.Theme.Color.Gray
 		return t.Layout(gtx)
 	}
 
@@ -380,7 +384,7 @@ func (pg *transactionDetailsPage) txnOutputs(gtx layout.Context, common *pageCom
 	})
 }
 
-func (pg *transactionDetailsPage) txnIORow(gtx layout.Context, amount int64, acctNum int32, address string, i int) layout.Dimensions {
+func (pg *TransactionDetailsPage) txnIORow(gtx layout.Context, amount int64, acctNum int32, address string, i int) layout.Dimensions {
 
 	accountName := "external"
 	walletName := ""
@@ -445,13 +449,13 @@ func (pg *transactionDetailsPage) txnIORow(gtx layout.Context, amount int64, acc
 	})
 }
 
-func (pg *transactionDetailsPage) viewTxn(gtx layout.Context, common *pageCommon) layout.Dimensions {
+func (pg *TransactionDetailsPage) viewTxn(gtx layout.Context) layout.Dimensions {
 	gtx.Constraints.Min.X = gtx.Constraints.Max.X
 	return pg.pageSections(gtx, func(gtx C) D {
 		return layout.Flex{Spacing: layout.SpaceBetween}.Layout(gtx,
 			layout.Rigid(pg.theme.Body1(values.String(values.StrViewOnDcrdata)).Layout),
 			layout.Rigid(func(gtx C) D {
-				redirect := common.icons.redirectIcon
+				redirect := pg.Icons.RedirectIcon
 				redirect.Scale = 1.0
 				return decredmaterial.Clickable(gtx, pg.toDcrdata, redirect.Layout)
 			}),
@@ -459,22 +463,21 @@ func (pg *transactionDetailsPage) viewTxn(gtx layout.Context, common *pageCommon
 	})
 }
 
-func (pg *transactionDetailsPage) pageSections(gtx layout.Context, body layout.Widget) layout.Dimensions {
+func (pg *TransactionDetailsPage) pageSections(gtx layout.Context, body layout.Widget) layout.Dimensions {
 	m := values.MarginPadding20
 	mtb := values.MarginPadding5
 	return layout.Inset{Left: m, Right: m, Top: mtb, Bottom: mtb}.Layout(gtx, body)
 }
 
-func (pg *transactionDetailsPage) separator(gtx layout.Context) layout.Dimensions {
+func (pg *TransactionDetailsPage) separator(gtx layout.Context) layout.Dimensions {
 	m := values.MarginPadding5
 	return layout.Inset{Top: m, Bottom: m}.Layout(gtx, pg.theme.Separator().Layout)
 }
 
-func (pg *transactionDetailsPage) handle() {
-	common := pg.common
+func (pg *TransactionDetailsPage) Handle() {
 	gtx := pg.gtx
 	if pg.toDcrdata.Clicked() {
-		goToURL(common.wallet.GetBlockExplorerURL(pg.transaction.Hash))
+		goToURL(pg.WL.Wallet.GetBlockExplorerURL(pg.transaction.Hash))
 	}
 
 	for _, b := range pg.copyTextBtn {
@@ -492,4 +495,4 @@ func (pg *transactionDetailsPage) handle() {
 	}
 }
 
-func (pg *transactionDetailsPage) onClose() {}
+func (pg *TransactionDetailsPage) OnClose() {}

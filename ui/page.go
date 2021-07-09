@@ -7,8 +7,7 @@ import (
 	"net/http"
 	"sort"
 
-	"gioui.org/unit"
-
+	"golang.org/x/exp/shiny/materialdesign/icons"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 
@@ -16,13 +15,20 @@ import (
 	"gioui.org/io/key"
 	"gioui.org/layout"
 	"gioui.org/op/paint"
+	"gioui.org/unit"
 	"gioui.org/widget"
 
 	"github.com/planetdecred/dcrlibwallet"
 	"github.com/planetdecred/godcr/ui/decredmaterial"
+	"github.com/planetdecred/godcr/ui/load"
+	"github.com/planetdecred/godcr/ui/page"
 	"github.com/planetdecred/godcr/ui/values"
 	"github.com/planetdecred/godcr/wallet"
-	"golang.org/x/exp/shiny/materialdesign/icons"
+)
+
+type (
+	Page  = load.Page
+	Modal = load.Modal
 )
 
 type pageIcons struct {
@@ -50,13 +56,6 @@ type pageIcons struct {
 	ticketUnminedIcon *widget.Image
 }
 
-type Page interface {
-	OnResume() // called when a page is starting or resuming from a paused state.
-	Layout(layout.Context) layout.Dimensions
-	handle()
-	onClose()
-}
-
 type navHandler struct {
 	clickable     *widget.Clickable
 	image         *widget.Image
@@ -72,12 +71,6 @@ type walletAccount struct {
 	totalBalance string
 	spendable    string
 	number       int32
-}
-
-type wallectAccountOption struct {
-	selectSendAccount           map[int][]walletAccount
-	selectReceiveAccount        map[int][]walletAccount
-	selectPurchaseTicketAccount map[int][]walletAccount
 }
 
 type DCRUSDTBittrex struct {
@@ -254,27 +247,27 @@ func (win *Window) newPageCommon(decredIcons map[string]image.Image) *pageCommon
 	return common
 }
 
-func (common *pageCommon) loadPages() map[string]Page {
+func loadPages(common *pageCommon, l *load.Load) map[string]Page {
 
 	common.testButton = common.theme.Button(new(widget.Clickable), "test button")
 
 	pages := make(map[string]Page)
 
-	pages[PageMore] = MorePage(common)
-	pages[PageReceive] = ReceivePage(common)
+	pages[page.MorePageID] = page.NewMorePage(l)
+	pages[page.ReceivePageID] = page.NewReceivePage(l)
 	pages[PageSend] = SendPage(common)
-	pages[PageVerifyMessage] = VerifyMessagePage(common)
-	pages[PageSeedBackup] = BackupPage(common)
-	pages[PageSettings] = SettingsPage(common)
-	pages[PageSecurityTools] = SecurityToolsPage(common)
-	pages[PageDebug] = DebugPage(common)
-	pages[PageLog] = LogPage(common)
-	pages[PageStat] = StatPage(common)
-	pages[PageAbout] = AboutPage(common)
-	pages[PageHelp] = HelpPage(common)
+	pages[page.VerifyMessagePageID] = page.NewVerifyMessagePage(l)
+	pages[page.SeedBackupPageID] = page.NewBackupPage(l)
+	pages[page.SettingsPageID] = page.NewSettingsPage(l)
+	pages[page.SecurityToolsPageID] = page.NewSecurityToolsPage(l)
+	pages[page.DebugPageID] = page.NewDebugPage(l)
+	pages[page.LogPageID] = page.NewLogPage(l)
+	pages[page.StatisticsPageID] = page.NewStatPage(l)
+	pages[page.AboutPageID] = page.NewAboutPage(l)
+	pages[page.HelpPageID] = page.NewHelpPage(l)
 	pages[PageUTXO] = UTXOPage(common)
 	pages[PageTickets] = TicketPage(common)
-	pages[ValidateAddress] = ValidateAddressPage(common)
+	pages[page.ValidateAddressPageID] = page.NewValidateAddressPage(l)
 	pages[PageTicketsList] = TicketPageList(common)
 	pages[PageTicketsActivity] = TicketActivityPage(common)
 

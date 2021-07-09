@@ -1,4 +1,4 @@
-package ui
+package modal
 
 import (
 	"fmt"
@@ -8,14 +8,16 @@ import (
 	"gioui.org/text"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+
 	"github.com/planetdecred/godcr/ui/decredmaterial"
+	"github.com/planetdecred/godcr/ui/load"
 	"github.com/planetdecred/godcr/ui/values"
 )
 
-const ModalCreateWallet = "create_wallet_modal"
+const CreateWallet = "create_wallet_modal"
 
-type createPasswordModal struct {
-	*pageCommon
+type CreatePasswordModal struct {
+	*load.Load
 	randomID string
 	modal    decredmaterial.Modal
 
@@ -30,32 +32,32 @@ type createPasswordModal struct {
 	isLoading      bool
 	materialLoader material.LoaderStyle
 
-	callback   func(walletName, password string, m *createPasswordModal) bool // return true to dismiss dialog
+	callback   func(walletName, password string, m *CreatePasswordModal) bool // return true to dismiss dialog
 	btnPositve decredmaterial.Button
 
 	btnNegative decredmaterial.Button
 }
 
-func newCreatePasswordModal(common *pageCommon) *createPasswordModal {
-	cm := &createPasswordModal{
-		pageCommon:       common,
-		randomID:         fmt.Sprintf("%s-%d", ModalCreateWallet, generateRandomNumber()),
-		modal:            *common.theme.ModalFloatTitle(),
-		passwordStrength: common.theme.ProgressBar(0),
-		btnPositve:       common.theme.Button(new(widget.Clickable), "Confirm"),
-		btnNegative:      common.theme.Button(new(widget.Clickable), "Cancel"),
+func NewCreatePasswordModal(l *load.Load) *CreatePasswordModal {
+	cm := &CreatePasswordModal{
+		Load:             l,
+		randomID:         fmt.Sprintf("%s-%d", CreateWallet, generateRandomNumber()),
+		modal:            *l.Theme.ModalFloatTitle(),
+		passwordStrength: l.Theme.ProgressBar(0),
+		btnPositve:       l.Theme.Button(new(widget.Clickable), "Confirm"),
+		btnNegative:      l.Theme.Button(new(widget.Clickable), "Cancel"),
 	}
 
 	cm.btnPositve.TextSize, cm.btnNegative.TextSize = values.TextSize16, values.TextSize16
 	cm.btnPositve.Font.Weight, cm.btnNegative.Font.Weight = text.Bold, text.Bold
 
-	cm.walletName = common.theme.Editor(new(widget.Editor), "Wallet name")
+	cm.walletName = l.Theme.Editor(new(widget.Editor), "Wallet name")
 	cm.walletName.Editor.SingleLine, cm.walletName.Editor.Submit = true, true
 
-	cm.passwordEditor = common.theme.EditorPassword(new(widget.Editor), "Spending password")
+	cm.passwordEditor = l.Theme.EditorPassword(new(widget.Editor), "Spending password")
 	cm.passwordEditor.Editor.SingleLine, cm.passwordEditor.Editor.Submit = true, true
 
-	cm.confirmPasswordEditor = common.theme.EditorPassword(new(widget.Editor), "Spending password")
+	cm.confirmPasswordEditor = l.Theme.EditorPassword(new(widget.Editor), "Spending password")
 	cm.confirmPasswordEditor.Editor.SingleLine, cm.confirmPasswordEditor.Editor.Submit = true, true
 
 	th := material.NewTheme(gofont.Collection())
@@ -64,59 +66,59 @@ func newCreatePasswordModal(common *pageCommon) *createPasswordModal {
 	return cm
 }
 
-func (cm *createPasswordModal) ModalID() string {
+func (cm *CreatePasswordModal) ModalID() string {
 	return cm.randomID
 }
 
-func (cm *createPasswordModal) OnResume() {
+func (cm *CreatePasswordModal) OnResume() {
 }
 
-func (cm *createPasswordModal) OnDismiss() {
+func (cm *CreatePasswordModal) OnDismiss() {
 
 }
 
-func (cm *createPasswordModal) Show() {
-	cm.showModal(cm)
+func (cm *CreatePasswordModal) Show() {
+	cm.ShowModal(cm)
 }
 
-func (cm *createPasswordModal) Dismiss() {
-	cm.dismissModal(cm)
+func (cm *CreatePasswordModal) Dismiss() {
+	cm.DismissModal(cm)
 }
 
-func (cm *createPasswordModal) title(title string) *createPasswordModal {
+func (cm *CreatePasswordModal) Title(title string) *CreatePasswordModal {
 	cm.dialogTitle = title
 	return cm
 }
 
-func (cm *createPasswordModal) enableName(enable bool) *createPasswordModal {
+func (cm *CreatePasswordModal) EnableName(enable bool) *CreatePasswordModal {
 	cm.walletNameEnabled = enable
 	return cm
 }
 
-func (cm *createPasswordModal) passwordHint(hint string) *createPasswordModal {
+func (cm *CreatePasswordModal) PasswordHint(hint string) *CreatePasswordModal {
 	cm.passwordEditor.Hint = hint
 	return cm
 }
 
-func (cm *createPasswordModal) confirmPasswordHint(hint string) *createPasswordModal {
+func (cm *CreatePasswordModal) ConfirmPasswordHint(hint string) *CreatePasswordModal {
 	cm.confirmPasswordEditor.Hint = hint
 	return cm
 }
 
-func (cm *createPasswordModal) passwordCreated(callback func(walletName, password string, m *createPasswordModal) bool) *createPasswordModal {
+func (cm *CreatePasswordModal) PasswordCreated(callback func(walletName, password string, m *CreatePasswordModal) bool) *CreatePasswordModal {
 	cm.callback = callback
 	return cm
 }
 
-func (cm *createPasswordModal) setLoading(loading bool) {
+func (cm *CreatePasswordModal) SetLoading(loading bool) {
 	cm.isLoading = loading
 }
 
-func (cm *createPasswordModal) setError(err string) {
+func (cm *CreatePasswordModal) SetError(err string) {
 
 }
 
-func (cm *createPasswordModal) Handle() {
+func (cm *CreatePasswordModal) Handle() {
 	if cm.passwordEditor.Editor.Text() == cm.confirmPasswordEditor.Editor.Text() {
 		// reset error label when password and matching password fields match
 		cm.confirmPasswordEditor.SetError("")
@@ -132,7 +134,7 @@ func (cm *createPasswordModal) Handle() {
 		if nameValid && editorsNotEmpty(cm.passwordEditor.Editor, cm.confirmPasswordEditor.Editor) &&
 			cm.passwordsMatch(cm.passwordEditor.Editor, cm.confirmPasswordEditor.Editor) {
 
-			cm.setLoading(true)
+			cm.SetLoading(true)
 			if cm.callback(cm.walletName.Editor.Text(), cm.passwordEditor.Editor.Text(), cm) {
 				cm.Dismiss()
 			}
@@ -146,10 +148,10 @@ func (cm *createPasswordModal) Handle() {
 		}
 	}
 
-	computePasswordStrength(&cm.passwordStrength, cm.theme, cm.passwordEditor.Editor)
+	computePasswordStrength(&cm.passwordStrength, cm.Theme, cm.passwordEditor.Editor)
 
 }
-func (cm *createPasswordModal) passwordsMatch(editors ...*widget.Editor) bool {
+func (cm *CreatePasswordModal) passwordsMatch(editors ...*widget.Editor) bool {
 	if len(editors) < 2 {
 		return false
 	}
@@ -159,19 +161,19 @@ func (cm *createPasswordModal) passwordsMatch(editors ...*widget.Editor) bool {
 
 	if password.Text() != matching.Text() {
 		cm.confirmPasswordEditor.SetError("passwords do not match")
-		cm.btnPositve.Background = cm.theme.Color.Hint
+		cm.btnPositve.Background = cm.Theme.Color.Hint
 		return false
 	}
 
 	cm.confirmPasswordEditor.SetError("")
-	cm.btnPositve.Background = cm.theme.Color.Primary
+	cm.btnPositve.Background = cm.Theme.Color.Primary
 	return true
 }
 
-func (cm *createPasswordModal) Layout(gtx layout.Context) D {
+func (cm *CreatePasswordModal) Layout(gtx layout.Context) D {
 	w := []layout.Widget{
 		func(gtx C) D {
-			t := cm.theme.H6(cm.dialogTitle)
+			t := cm.Theme.H6(cm.dialogTitle)
 			t.Font.Weight = text.Bold
 			return t.Layout(gtx)
 		},
@@ -195,8 +197,8 @@ func (cm *createPasswordModal) Layout(gtx layout.Context) D {
 				return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 					layout.Rigid(func(gtx C) D {
 
-						cm.btnNegative.Background = cm.theme.Color.Surface
-						cm.btnNegative.Color = cm.theme.Color.Primary
+						cm.btnNegative.Background = cm.Theme.Color.Surface
+						cm.btnNegative.Color = cm.Theme.Color.Primary
 						return cm.btnNegative.Layout(gtx)
 					}),
 					layout.Rigid(func(gtx C) D {
@@ -204,7 +206,7 @@ func (cm *createPasswordModal) Layout(gtx layout.Context) D {
 							return cm.materialLoader.Layout(gtx)
 						}
 
-						cm.btnPositve.Background, cm.btnPositve.Color = cm.theme.Color.Surface, cm.theme.Color.Primary
+						cm.btnPositve.Background, cm.btnPositve.Color = cm.Theme.Color.Surface, cm.Theme.Color.Primary
 						return cm.btnPositve.Layout(gtx)
 					}),
 				)

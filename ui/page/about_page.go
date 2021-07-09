@@ -1,18 +1,18 @@
-package ui
+package page
 
 import (
 	"gioui.org/layout"
 	"gioui.org/widget"
 
 	"github.com/planetdecred/godcr/ui/decredmaterial"
+	"github.com/planetdecred/godcr/ui/load"
 	"github.com/planetdecred/godcr/ui/values"
 )
 
-const PageAbout = "About"
+const AboutPageID = "About"
 
-type aboutPage struct {
-	common    *pageCommon
-	theme     *decredmaterial.Theme
+type AboutPage struct {
+	*load.Load
 	card      decredmaterial.Card
 	container *layout.List
 
@@ -30,43 +30,43 @@ type aboutPage struct {
 	backButton decredmaterial.IconButton
 }
 
-func AboutPage(common *pageCommon) Page {
-	pg := &aboutPage{
-		common:           common,
-		theme:            common.theme,
-		card:             common.theme.Card(),
+func NewAboutPage(l *load.Load) *AboutPage {
+	pg := &AboutPage{
+		Load:             l,
+		card:             l.Theme.Card(),
 		container:        &layout.List{Axis: layout.Vertical},
-		version:          common.theme.Body1("Version"),
-		versionValue:     common.theme.Body1("v1.5.2"),
-		buildDate:        common.theme.Body1("Build date"),
-		buildDateValue:   common.theme.Body1("2020-09-10"),
-		network:          common.theme.Body1("Network"),
-		networkValue:     common.theme.Body1(common.wallet.Net),
-		license:          common.theme.Body1("License"),
+		version:          l.Theme.Body1("Version"),
+		versionValue:     l.Theme.Body1("v1.5.2"),
+		buildDate:        l.Theme.Body1("Build date"),
+		buildDateValue:   l.Theme.Body1("2020-09-10"),
+		network:          l.Theme.Body1("Network"),
+		networkValue:     l.Theme.Body1(l.WL.Wallet.Net),
+		license:          l.Theme.Body1("License"),
 		licenseRow:       new(widget.Clickable),
-		chevronRightIcon: common.icons.chevronRight,
+		chevronRightIcon: l.Icons.ChevronRight,
 	}
 
-	pg.backButton, _ = common.SubPageHeaderButtons()
-	pg.versionValue.Color = pg.theme.Color.Gray
-	pg.buildDateValue.Color = pg.theme.Color.Gray
-	pg.networkValue.Color = pg.theme.Color.Gray
-	pg.chevronRightIcon.Color = pg.theme.Color.Gray
+	pg.backButton, _ = subpageHeaderButtons(l)
+	pg.versionValue.Color = pg.Theme.Color.Gray
+	pg.buildDateValue.Color = pg.Theme.Color.Gray
+	pg.networkValue.Color = pg.Theme.Color.Gray
+	pg.chevronRightIcon.Color = pg.Theme.Color.Gray
 
 	return pg
 }
 
-func (pg *aboutPage) OnResume() {
+func (pg *AboutPage) OnResume() {
 
 }
 
-func (pg *aboutPage) Layout(gtx layout.Context) layout.Dimensions {
+func (pg *AboutPage) Layout(gtx layout.Context) layout.Dimensions {
 	body := func(gtx C) D {
 		page := SubPage{
+			Load:       pg.Load,
 			title:      "About",
 			backButton: pg.backButton,
 			back: func() {
-				pg.common.changePage(PageMore)
+				pg.ChangePage(MorePageID)
 			},
 			body: func(gtx C) D {
 				return pg.card.Layout(gtx, func(gtx C) D {
@@ -74,13 +74,13 @@ func (pg *aboutPage) Layout(gtx layout.Context) layout.Dimensions {
 				})
 			},
 		}
-		return pg.common.SubPageLayout(gtx, page)
+		return page.Layout(gtx)
 	}
 
-	return pg.common.UniformPadding(gtx, body)
+	return uniformPadding(gtx, body)
 }
 
-func (pg *aboutPage) layoutRows(gtx layout.Context) layout.Dimensions {
+func (pg *AboutPage) layoutRows(gtx layout.Context) layout.Dimensions {
 	w := []func(gtx C) D{
 		func(gtx C) D {
 			return endToEndRow(gtx, pg.version.Layout, pg.versionValue.Layout)
@@ -124,16 +124,17 @@ func (pg *aboutPage) layoutRows(gtx layout.Context) layout.Dimensions {
 					}
 					return layout.Inset{
 						Left: values.MarginPadding16,
-					}.Layout(gtx, pg.theme.Separator().Layout)
+					}.Layout(gtx, pg.Theme.Separator().Layout)
 				}),
 			)
 		})
 	})
 }
 
-func (pg *aboutPage) handle() {
+func (pg *AboutPage) Handle() {
 	if pg.licenseRow.Clicked() {
-		pg.common.changeFragment(LicensePage(pg.common), PageLicense)
+		pg.ChangeFragment(NewLicensePage(pg.Load), LicensePageID)
 	}
 }
-func (pg *aboutPage) onClose() {}
+
+func (pg *AboutPage) OnClose() {}

@@ -1,14 +1,16 @@
-package ui
+package page
 
 import (
 	"gioui.org/layout"
+
 	"github.com/planetdecred/godcr/ui/decredmaterial"
+	"github.com/planetdecred/godcr/ui/load"
 	"github.com/planetdecred/godcr/ui/values"
 )
 
-const PageLicense = "License"
+const LicensePageID = "License"
 
-const License = `ISC License
+const license = `ISC License
 
 Copyright (c) 2018-2021, Raedah Group
 
@@ -24,54 +26,50 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.`
 
-type licensePage struct {
-	common        *pageCommon
+type LicensePage struct {
+	*load.Load
 	pageContainer layout.List
 
 	backButton decredmaterial.IconButton
 }
 
-func LicensePage(common *pageCommon) Page {
-	pg := &licensePage{
-		common:        common,
+func NewLicensePage(l *load.Load) *LicensePage {
+	pg := &LicensePage{
+		Load:          l,
 		pageContainer: layout.List{Axis: layout.Vertical},
 	}
-	pg.backButton, _ = common.SubPageHeaderButtons()
+	pg.backButton, _ = subpageHeaderButtons(l)
 
 	return pg
 }
 
-func (pg *licensePage) OnResume() {
-
-}
+func (pg *LicensePage) OnResume() {}
 
 //main page layout
-func (pg *licensePage) Layout(gtx layout.Context) layout.Dimensions {
-	common := pg.common
+func (pg *LicensePage) Layout(gtx layout.Context) layout.Dimensions {
 	d := func(gtx C) D {
-		page := SubPage{
+		sp := SubPage{
+			Load:       pg.Load,
 			title:      "License",
 			backButton: pg.backButton,
 			back: func() {
-				pg.common.changePage(PageAbout)
+				pg.ChangePage(AboutPageID)
 			},
 			body: func(gtx C) D {
-				return common.theme.Card().Layout(gtx, func(gtx C) D {
+				return pg.Theme.Card().Layout(gtx, func(gtx C) D {
 					return layout.UniformInset(values.MarginPadding25).Layout(gtx, func(gtx C) D {
-						licenseText := common.theme.Body1(License)
-						licenseText.Color = common.theme.Color.Gray
+						licenseText := pg.Theme.Body1(license)
+						licenseText.Color = pg.Theme.Color.Gray
 						return layout.Inset{Bottom: values.MarginPadding20}.Layout(gtx, licenseText.Layout)
 					})
 				})
 			},
 		}
-		return common.SubPageLayout(gtx, page)
+		return sp.Layout(gtx)
 	}
-	return common.UniformPadding(gtx, d)
+	return uniformPadding(gtx, d)
 }
 
-func (pg *licensePage) handle() {
+func (pg *LicensePage) Handle() {}
 
-}
-
-func (pg *licensePage) onClose() {}
+func (pg *LicensePage) OnClose() {}

@@ -32,7 +32,7 @@ func newSendConfirmModal(common *pageCommon, data *comfirmModalData) *sendConfir
 	return scm
 }
 
-func (scm *sendConfirmModal) modalID() string {
+func (scm *sendConfirmModal) ModalID() string {
 	return ModalSendConfirm
 }
 
@@ -51,7 +51,7 @@ func (scm *sendConfirmModal) OnDismiss() {
 
 }
 
-func (scm *sendConfirmModal) handle() {
+func (scm *sendConfirmModal) Handle() {
 	if scm.passwordEditor.Editor.Text() == "" {
 		scm.confirmButton.Background = scm.theme.Color.InactiveGray
 	} else {

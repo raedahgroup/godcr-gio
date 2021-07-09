@@ -148,7 +148,7 @@ func filterTickets(tickets []wallet.Ticket, f func(string) bool) []wallet.Ticket
 	return t
 }
 
-func (pg *ticketsActivityPage) handle() {
+func (pg *ticketsActivityPage) Handle() {
 
 	sortSelection := pg.orderDropDown.SelectedIndex()
 	if pg.filterSorter != sortSelection {
@@ -169,4 +169,4 @@ func (pg *ticketsActivityPage) handle() {
 
 }
 
-func (pg *ticketsActivityPage) onClose() {}
+func (pg *ticketsActivityPage) OnClose() {}

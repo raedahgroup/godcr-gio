@@ -6,9 +6,12 @@ import (
 	"gioui.org/layout"
 	"gioui.org/unit"
 	"gioui.org/widget"
+
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/planetdecred/dcrlibwallet"
 	"github.com/planetdecred/godcr/ui/decredmaterial"
+	"github.com/planetdecred/godcr/ui/load"
+	"github.com/planetdecred/godcr/ui/page"
 	"github.com/planetdecred/godcr/ui/values"
 )
 
@@ -17,6 +20,7 @@ const PageMain = "Main"
 type mainPage struct {
 	*pageCommon
 
+	load                    *load.Load
 	appBarNavItems          []navHandler
 	drawerNavItems          []navHandler
 	isNavDrawerMinimized    bool
@@ -34,31 +38,36 @@ type mainPage struct {
 	totalBalanceUSD string
 }
 
-func newMainPage(common *pageCommon) *mainPage {
+func newMainPage(common *pageCommon, l *load.Load) *mainPage {
 
 	mp := &mainPage{
-
+		load:       l,
 		pageCommon: common,
 		autoSync:   true,
-		pages:      common.loadPages(),
+		pages:      loadPages(common, l),
 
 		minimizeNavDrawerButton: common.theme.PlainIconButton(new(widget.Clickable), common.icons.navigationArrowBack),
 		maximizeNavDrawerButton: common.theme.PlainIconButton(new(widget.Clickable), common.icons.navigationArrowForward),
 	}
 
 	// init shared page functions
-	common.changeFragment = mp.changeFragment
-	common.changePage = mp.changePage
-	common.setReturnPage = mp.setReturnPage
-	common.returnPage = &mp.previous
-	common.page = &mp.current
-	common.toggleSync = func() {
+	// todo: common methods will be removed when all pages have been moved to the page package
+	common.changeFragment, l.ChangeFragment = mp.changeFragment, mp.changeFragment
+	common.changePage, l.ChangePage = mp.changePage, mp.changePage
+	common.setReturnPage, l.SetReturnPage = mp.setReturnPage, mp.setReturnPage
+	common.returnPage, l.ReturnPage = &mp.previous, &mp.previous
+	common.page, l.Page = &mp.current, &mp.current
+
+	toggleSync := func() {
 		if mp.multiWallet.IsConnectedToDecredNetwork() {
 			mp.multiWallet.CancelSync()
 		} else {
 			mp.startSyncing()
 		}
 	}
+	// todo: to be removed when all pages have been migrated
+	common.toggleSync = toggleSync
+	l.ToggleSync = toggleSync
 
 	iconColor := common.theme.Color.Gray3
 	mp.minimizeNavDrawerButton.Color, mp.maximizeNavDrawerButton.Color = iconColor, iconColor
@@ -136,7 +145,7 @@ func (mp *mainPage) OnResume() {
 	if pg, ok := mp.pages[mp.current]; ok {
 		pg.OnResume()
 	} else {
-		mp.changeFragment(OverviewPage(mp.pageCommon), PageOverview)
+		mp.changeFragment(page.NewOverviewPage(mp.load), page.OverviewPageID)
 	}
 
 	if mp.autoSync {
@@ -147,7 +156,7 @@ func (mp *mainPage) OnResume() {
 
 func (mp *mainPage) updateBalance() {
 	currencyExchangeValue := mp.wallet.ReadStringConfigValueForKey(dcrlibwallet.CurrencyConversionConfigKey)
-	mp.usdExchangeSet = currencyExchangeValue == USDExchangeValue
+	mp.usdExchangeSet = currencyExchangeValue == page.USDExchangeValue
 
 	totalBalance, err := mp.calculateTotalWalletsBalance()
 	if err == nil {
@@ -221,8 +230,7 @@ func (mp *mainPage) unlockWalletForSyncing(wal *dcrlibwallet.Wallet) {
 
 }
 
-func (mp *mainPage) handle() {
-
+func (mp *mainPage) Handle() {
 	for mp.minimizeNavDrawerButton.Button.Clicked() {
 		mp.isNavDrawerMinimized = true
 	}
@@ -241,11 +249,11 @@ func (mp *mainPage) handle() {
 	for i := range mp.drawerNavItems {
 		for mp.drawerNavItems[i].clickable.Clicked() {
 			if i == 0 {
-				mp.changeFragment(OverviewPage(mp.pageCommon), PageOverview)
+				mp.changeFragment(page.NewOverviewPage(mp.load), page.OverviewPageID)
 			} else if i == 1 {
-				mp.changeFragment(TransactionsPage(mp.pageCommon), PageTransactions)
+				mp.changeFragment(page.NewTransactionsPage(mp.load), page.Transactions)
 			} else if i == 2 {
-				mp.changeFragment(WalletPage(mp.pageCommon), PageWallet)
+				mp.changeFragment(page.NewWalletPage(mp.load), page.WalletPageID)
 			} else if i == 3 {
 				mp.changeFragment(ProposalsPage(mp.pageCommon), PageProposals)
 			} else {
@@ -255,9 +263,9 @@ func (mp *mainPage) handle() {
 	}
 }
 
-func (mp *mainPage) onClose() {
+func (mp *mainPage) OnClose() {
 	if pg, ok := mp.pages[mp.current]; ok {
-		pg.onClose()
+		pg.OnClose()
 	}
 	mp.multiWallet.RemoveAccountMixerNotificationListener(PageMain)
 	mp.multiWallet.Politeia.RemoveNotificationListener(PageMain)
@@ -272,7 +280,7 @@ func (mp *mainPage) changeFragment(page Page, id string) {
 
 func (mp *mainPage) changePage(page string) {
 	if pg, ok := mp.pages[mp.current]; ok {
-		pg.onClose()
+		pg.OnClose()
 	}
 
 	if pg, ok := mp.pages[page]; ok {
@@ -287,12 +295,12 @@ func (mp *mainPage) setReturnPage(from string) {
 
 func (mp *mainPage) Layout(gtx layout.Context) layout.Dimensions {
 	mp.handler() // pageCommon
-	mp.pages[mp.current].handle()
+	mp.pages[mp.current].Handle()
 
 	return layout.Stack{}.Layout(gtx,
 		layout.Expanded(func(gtx C) D {
 			// fill the entire window with a color if a user has no wallet created
-			if mp.current == PageCreateRestore {
+			if mp.current == page.CreateRestorePageID {
 				return decredmaterial.Fill(gtx, mp.theme.Color.Surface)
 			}
 
@@ -312,7 +320,7 @@ func (mp *mainPage) Layout(gtx layout.Context) layout.Dimensions {
 		}),
 		layout.Stacked(func(gtx C) D {
 			// stack the page content on the entire window if a user has no wallet
-			if mp.current == PageCreateRestore {
+			if mp.current == page.CreateRestorePageID {
 				return mp.pages[mp.current].Layout(gtx)
 			}
 			return layout.Dimensions{}

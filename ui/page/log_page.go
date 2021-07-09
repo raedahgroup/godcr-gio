@@ -1,4 +1,4 @@
-package ui
+package page
 
 import (
 	"sync"
@@ -7,19 +7,21 @@ import (
 	"gioui.org/layout"
 	"gioui.org/unit"
 	"gioui.org/widget"
+
 	"github.com/planetdecred/godcr/ui/decredmaterial"
+	"github.com/planetdecred/godcr/ui/load"
 	"github.com/planetdecred/godcr/ui/values"
 )
 
-const PageLog = "Log"
+const LogPageID = "Log"
 
-type logPage struct {
-	theme  *decredmaterial.Theme
-	common *pageCommon
+type LogPage struct {
+	*load.Load
 
-	copyLog    *widget.Clickable
-	copyIcon   *widget.Image
-	backButton decredmaterial.IconButton
+	internalLog chan string
+	copyLog     *widget.Clickable
+	copyIcon    *widget.Image
+	backButton  decredmaterial.IconButton
 
 	entriesList layout.List
 	fullLog     string
@@ -27,10 +29,10 @@ type logPage struct {
 	entriesLock sync.Mutex
 }
 
-func LogPage(common *pageCommon) Page {
-	pg := &logPage{
-		common: common,
-		theme:  common.theme,
+func NewLogPage(l *load.Load) *LogPage {
+	pg := &LogPage{
+		Load:        l,
+		internalLog: l.Receiver.InternalLog,
 		entriesList: layout.List{
 			Axis:        layout.Vertical,
 			ScrollToEnd: true,
@@ -39,21 +41,21 @@ func LogPage(common *pageCommon) Page {
 		logEntries: make([]decredmaterial.Label, 0, 20),
 	}
 
-	pg.copyIcon = common.icons.copyIcon
+	pg.copyIcon = pg.Icons.CopyIcon
 	pg.copyIcon.Scale = 0.25
 
-	pg.backButton, _ = common.SubPageHeaderButtons()
+	pg.backButton, _ = subpageHeaderButtons(l)
 
-	go pg.watchLogs(*common.internalLog)
+	go pg.watchLogs(pg.internalLog)
 
 	return pg
 }
 
-func (pg *logPage) OnResume() {
+func (pg *LogPage) OnResume() {
 
 }
 
-func (pg *logPage) copyLogEntries(gtx C) {
+func (pg *LogPage) copyLogEntries(gtx C) {
 	go func() {
 		pg.entriesLock.Lock()
 		defer pg.entriesLock.Unlock()
@@ -61,25 +63,24 @@ func (pg *logPage) copyLogEntries(gtx C) {
 	}()
 }
 
-func (pg *logPage) watchLogs(internalLog chan string) {
+func (pg *LogPage) watchLogs(internalLog chan string) {
 	for l := range internalLog {
 		entry := l[:len(l)-1]
 		pg.entriesLock.Lock()
 		pg.fullLog += l
-		pg.logEntries = append(pg.logEntries, pg.theme.Body1(entry))
+		pg.logEntries = append(pg.logEntries, pg.Theme.Body1(entry))
 		pg.entriesLock.Unlock()
 	}
 }
 
-func (pg *logPage) Layout(gtx C) D {
-	common := pg.common
-
+func (pg *LogPage) Layout(gtx C) D {
 	container := func(gtx C) D {
-		page := SubPage{
+		sp := SubPage{
+			Load:       pg.Load,
 			title:      "Wallet log",
 			backButton: pg.backButton,
 			back: func() {
-				common.changePage(PageDebug)
+				pg.ChangePage(DebugPageID)
 			},
 			extraItem: pg.copyLog,
 			extra: func(gtx C) D {
@@ -96,8 +97,8 @@ func (pg *logPage) Layout(gtx C) D {
 				pg.copyLogEntries(gtx)
 			},
 			body: func(gtx C) D {
-				background := common.theme.Color.Surface
-				card := common.theme.Card()
+				background := pg.Theme.Color.Surface
+				card := pg.Theme.Card()
 				card.Color = background
 				return card.Layout(gtx, func(gtx C) D {
 					gtx.Constraints.Min.X = gtx.Constraints.Max.X
@@ -113,10 +114,10 @@ func (pg *logPage) Layout(gtx C) D {
 				})
 			},
 		}
-		return common.SubPageLayout(gtx, page)
+		return sp.Layout(gtx)
 	}
-	return pg.common.UniformPadding(gtx, container)
+	return uniformPadding(gtx, container)
 }
 
-func (pg *logPage) handle()  {}
-func (pg *logPage) onClose() {}
+func (pg *LogPage) Handle()  {}
+func (pg *LogPage) OnClose() {}

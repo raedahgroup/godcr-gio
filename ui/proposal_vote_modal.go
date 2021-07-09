@@ -79,7 +79,7 @@ func newvoteModal(common *pageCommon) *voteModal {
 	return cm
 }
 
-func (cm *voteModal) modalID() string {
+func (cm *voteModal) ModalID() string {
 	return cm.randomID
 }
 
@@ -127,7 +127,7 @@ func (i *inputVoteOptionsWidgets) handleVoteCountButtons() {
 	}
 }
 
-func (cm *voteModal) handle() {
+func (cm *voteModal) Handle() {
 	if cm.btnNegative.Button.Clicked() {
 		cm.Dismiss()
 	}

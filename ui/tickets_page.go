@@ -728,7 +728,7 @@ func (pg *ticketPage) createNewVSPD(c *pageCommon) {
 	pg.vspd = vspd
 }
 
-func (pg *ticketPage) handle() {
+func (pg *ticketPage) Handle() {
 	c := pg.common
 	// TODO: frefresh when ticket price update from remote
 	if len(c.info.Wallets) > 0 && pg.ticketPrice == "" {
@@ -833,4 +833,4 @@ func (pg *ticketPage) handle() {
 	}
 }
 
-func (pg *ticketPage) onClose() {}
+func (pg *ticketPage) OnClose() {}

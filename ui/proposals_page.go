@@ -168,7 +168,7 @@ func (pg *proposalsPage) loadProposals(category int) {
 	}
 }
 
-func (pg *proposalsPage) handle() {
+func (pg *proposalsPage) Handle() {
 
 	if clicked, selectedItem := pg.categoryList.ItemClicked(); clicked {
 		go pg.loadProposals(selectedItem)
@@ -540,7 +540,7 @@ func (pg *proposalsPage) listenForSyncNotifications() {
 	}()
 }
 
-func (pg *proposalsPage) onClose() {
+func (pg *proposalsPage) OnClose() {
 	pg.pageClosing <- true
 }
 
